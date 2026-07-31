@@ -1,0 +1,23 @@
+Package: accessConsole
+Type: Package
+Title: Admin Console for Managing Apps, Roles, Permissions, and Groups
+Version: 0.1.0
+Authors@R: person("Daniel", "Ehnes", email = "danielehnes@gmail.com", role = c("aut", "cre"))
+Description: The admin console Shiny app for a multi-app identity
+    system: create/delete apps, roles, and permissions; grant/revoke
+    per-app admin rights; manage groups and membership; and control
+    per-user and per-group access and roles for each app. Depends on
+    authClient for shared user identity (create_user/email checks) and
+    password handling.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    authClient,
+    shiny,
+    DT,
+    DBI,
+    pool,
+    RSQLite,
+    sodium,
+    uuid
+Config/roxygen2/version: 8.0.0

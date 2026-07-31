@@ -1,0 +1,169 @@
+---
+title: "Getting Started with authClient"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with authClient}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+This walks through wiring `authClient` into a Shiny app from scratch, then
+extending that to real single sign-on (SSO) across two separate apps
+sharing the same identity database.
+
+Code chunks below are shown for reading, not executed as part of building
+this vignette — a real Shiny app blocks, which doesn't fit inside a knitted
+document. Copy them into an actual `app.R` to run them.
+
+## 1. What you need before starting
+
+- A shared identity database already following the schema in
+  `python/repository/tablestructure_user.py` (`users`, `apps`,
+  `user_app_access`, `roles`, `permissions`, `user_roles`, `sessions`, etc.),
+  reachable from your app's process.
+- An `app_key` registered for your app in the `apps` table — this is
+  normally created by a console admin through `accessConsole`'s "Create a
+  new app" panel, not by your app itself. `authClient` only *reads* access
+  and permission grants; it doesn't manage them.
+- An `AUTH_SESSION_SECRET` environment variable, set to the **same** value
+  in every app that should share SSO sessions. This is what lets one app
+  validate a session cookie another app issued — different secrets means
+  the tokens simply won't validate anywhere else.
+
+## 2. A single app, with login and an access gate
+
+```{r}
+library(shiny)
+library(pool)
+library(authClient)
+
+con <- dbPool(RSQLite::SQLite(), dbname = "path/to/shared.sqlite", onCreate = function(conn) {
+  DBI::dbExecute(conn, "PRAGMA foreign_keys = ON;")
+  DBI::dbExecute(conn, "PRAGMA journal_mode = WAL;")
+})
+ensure_sessions_schema(con)
+ensure_auth_settings_schema(con)
+onStop(function() poolClose(con))
+
+ui <- fluidPage(
+  authLoginUI("auth"),
+  uiOutput("app_body")
+)
+
+server <- function(input, output, session) {
+  auth <- authLoginServer("auth", con, require_app_key = "invoicing")
+
+  output$app_body <- renderUI({
+    # checked() only flips to TRUE once the SSO cookie check has actually
+    # resolved -- gating on logged_in() alone flashes the login form for a
+    # frame on every page load.
+    req(auth$checked())
+    if (!auth$logged_in()) return(NULL)
+
+    tagList(
+      fluidRow(
+        column(9, h4(paste("Logged in as", auth$username()))),
+        column(3, actionButton("logout_btn", "Log out"))
+      ),
+      p("You're in -- user_has_app_access() already passed, or you wouldn't be here.")
+    )
+  })
+
+  observeEvent(input$logout_btn, auth$logout())
+}
+
+shinyApp(ui, server)
+```
+
+If the logged-in user doesn't have access to `"invoicing"` (checked via
+`user_has_app_access()` internally), the login form shows "You don't have
+access to this application." instead of letting them in — access is denied
+at login time, not left for the rest of the app to check.
+
+## 3. Gating a specific tab on a permission, not just app access
+
+`has_permission()` is checked separately from app access — a user can be
+allowed to *use* an app but not hold every permission inside it (e.g. can
+view invoices but not delete them):
+
+```{r}
+output$app_body <- renderUI({
+  req(auth$checked())
+  if (!auth$logged_in()) return(NULL)
+
+  tagList(
+    tabsetPanel(
+      tabPanel("View", p("Everyone with app access sees this.")),
+      if (auth$has_permission("invoicing", "invoice.delete")) {
+        tabPanel("Delete", actionButton("del", "Delete an invoice"))
+      }
+    )
+  )
+})
+```
+
+`has_permission()` results are cached for up to 8 hours per session by
+default (`permission_cache_ttl_secs` on `authLoginServer()`) — fine for
+deciding whether a tab is visible, not a substitute for checking again at
+the point a sensitive action actually runs.
+
+## 4. Letting users change their own password
+
+```{r}
+output$app_body <- renderUI({
+  req(auth$checked())
+  if (!auth$logged_in()) return(NULL)
+  changePasswordUI("pw")
+})
+changePasswordServer("pw", con, auth$user_id)
+```
+
+A successful change revokes every other session belonging to that user —
+an old, still-open browser tab elsewhere won't keep working on the old
+password.
+
+## 5. Turning this into real SSO across two apps
+
+Nothing extra to *build* — SSO is just what you get for free once two apps
+satisfy the requirements from step 1:
+
+1. Both apps point at the **same** database.
+2. Both apps have the **same** `AUTH_SESSION_SECRET`.
+3. Both apps are served under a **shared parent domain** (e.g.
+   `invoicing.internal.example.com` and `reporting.internal.example.com`),
+   so a cookie scoped with `cookie_domain = ".internal.example.com"` reaches
+   both. Pass that explicitly to `authLoginServer()` on every app:
+
+```{r}
+auth <- authLoginServer("auth", con,
+                         require_app_key = "reporting",
+                         cookie_domain = ".internal.example.com")
+```
+
+With that in place: log into the invoicing app, then open the reporting
+app in the same browser — its own `authLoginServer()` reads the same
+cookie on page load, calls `validate_session()`, and logs you in silently.
+No second password prompt, and (if audit logging is enabled — see below)
+both apps show up as separate entries in the audit log, because the
+cookie-reuse path logs access just like a fresh login does.
+
+If your apps *aren't* under a shared parent domain, the cookie's `Domain=`
+scope can't reach across them — you'd need a central auth gateway in front
+of everything instead, which is a much bigger infrastructure project than
+this package covers.
+
+## 6. Turning on presence auditing (optional, off by default)
+
+```{r}
+set_audit_log_enabled(con, TRUE)
+```
+
+This is one flag in the shared `auth_settings` table — flipping it applies
+to every app using `authClient` against this database immediately, no
+per-app config or redeploy. It only ever records *that* a user accessed a
+given app (`user_id`, `app_id`, timestamp) — not what they did or for how
+long.

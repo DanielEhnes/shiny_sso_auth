@@ -1,0 +1,5 @@
+[development]
+USERS_DB_PATH = "sqlite:///../data/users_database_dev_v01.sqlite"
+
+[production]
+USERS_DB_PATH = "sqlite:///../data/users_database_dev_v01.sqlite"

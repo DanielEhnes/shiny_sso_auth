@@ -1,0 +1,24 @@
+Package: authClient
+Type: Package
+Title: Shared Authentication and SSO Client for Shiny Apps
+Version: 0.1.0
+Authors@R: person("Daniel", "Ehnes", email = "danielehnes@gmail.com", role = c("aut", "cre"))
+Description: Shared user authentication, DB-backed single sign-on sessions,
+    and per-app access checks against a central identity database.
+    Any Shiny app can depend on this package to authenticate its users and
+    check whether they are allowed to use that app, without pulling in the
+    admin console UI.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    shiny,
+    DBI,
+    digest,
+    openssl,
+    sodium,
+    uuid
+Suggests:
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
