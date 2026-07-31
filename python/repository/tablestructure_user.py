@@ -24,7 +24,6 @@ from sqlalchemy import (
     Text,
     Boolean,
     Integer,
-    BigInteger,
     DateTime,
     UniqueConstraint,
     Index,
@@ -388,7 +387,13 @@ class Session(Base):
 class AuthAuditLog(Base):
     __tablename__ = "auth_audit_log"
 
-    log_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # NOTE: Integer, not BigInteger -- SQLite only treats a primary-key
+    # column as an auto-incrementing rowid alias when its declared type is
+    # the literal word "INTEGER"; BigInteger compiles to "BIGINT", which has
+    # the same numeric affinity but does NOT qualify, so any INSERT that
+    # omits log_id fails with "NOT NULL constraint failed". Confirmed by
+    # testing directly against the original BigInteger-typed table.
+    log_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.user_id", ondelete="SET NULL")
     )

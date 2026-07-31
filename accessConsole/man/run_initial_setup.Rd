@@ -4,7 +4,12 @@
 \alias{run_initial_setup}
 \title{Idempotently seed the console/groups pseudo-apps and a bootstrap admin}
 \usage{
-run_initial_setup(admin_username, admin_email, admin_password = "admin")
+run_initial_setup(
+  admin_username,
+  admin_email,
+  admin_password = "admin",
+  audit_log_enabled = FALSE
+)
 }
 \arguments{
 \item{admin_username}{Username for the bootstrap admin account.}
@@ -14,6 +19,14 @@ run_initial_setup(admin_username, admin_email, admin_password = "admin")
 \item{admin_password}{Password for the bootstrap admin account if it
 doesn't already exist. Defaults to `"admin"` -- change it via the
 in-app "Change password" panel after first login.}
+
+\item{audit_log_enabled}{Whether presence audit logging
+(`authClient::log_app_access()`) should start out enabled. Only
+applied the first time this is called against a given database --
+once the `auth_settings` row exists, this argument is ignored, so a
+later manual `authClient::set_audit_log_enabled()` call (or a console
+admin toggling it) is never silently overwritten by a subsequent
+restart.}
 }
 \value{
 Invisibly, the bootstrap admin's user ID.

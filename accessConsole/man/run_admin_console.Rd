@@ -10,7 +10,8 @@ run_admin_console(
   admin_email,
   host = "127.0.0.1",
   port = NULL,
-  session_secret = Sys.getenv("AUTH_SESSION_SECRET")
+  session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
+  audit_log_enabled = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ pick one.}
 \item{session_secret}{Shared HMAC key for SSO sessions; must match every
 other app sharing SSO. Defaults to the `AUTH_SESSION_SECRET`
 environment variable.}
+
+\item{audit_log_enabled}{Whether presence audit logging should start
+out enabled. Only takes effect the first time this is run against a
+given database -- see [run_initial_setup()].}
 }
 \value{
 A `shiny::shinyApp()` object.
