@@ -1,0 +1,41 @@
+/* Console color theme: dark wells, dark top navbar, light text throughout. */
+
+.navbar-default {
+  background-color: #131921;
+  border-color: #131921;
+}
+
+.navbar-default .navbar-brand,
+.navbar-default .navbar-nav > li > a {
+  color: #FFFFF2;
+}
+
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > li > a:focus {
+  color: #FFFFF2;
+  background-color: rgba(255, 255, 242, 0.1);
+}
+
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:hover,
+.navbar-default .navbar-nav > .active > a:focus {
+  color: #FFFFF2;
+  background-color: #236D63;
+}
+
+.well {
+  background-color: #ffffff;
+  color: #14433E;
+  border-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .10);
+}
+
+.well h3,
+.well h4,
+.well p,
+.well label,
+.well span,
+.well .help-block {
+  color: #14433E;
+}

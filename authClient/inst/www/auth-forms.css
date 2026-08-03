@@ -1,0 +1,36 @@
+/* Shared "card" look for authClient's own forms (login, change password) --
+   a fixed, self-contained style independent of whatever theme the
+   consuming app applies to its own wells/panels, so these look the same
+   everywhere they're dropped in. */
+
+.auth-card {
+  max-width: 360px;
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .10);
+}
+
+.auth-card h3,
+.auth-card h4 {
+  margin-bottom: 24px;
+  font-weight: 700;
+}
+
+/* Only the standalone login form gets centered on its own page --
+   change-password sits inline among other content, so it doesn't get this. */
+.login-box {
+  margin: 120px auto;
+}
+
+.login-error {
+  color: #dc3545;
+  margin-top: 10px;
+  font-size: .9em;
+}
+
+.login-success {
+  color: #1a7d1a;
+  margin-top: 10px;
+  font-size: .9em;
+}

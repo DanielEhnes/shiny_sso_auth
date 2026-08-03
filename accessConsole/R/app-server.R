@@ -45,13 +45,48 @@ build_console_server <- function() {
 
     # --------------------------------------------------------------------
     # Admin auth state -- delegated to authClient's SSO module.
-    # require_app_key = NULL: any registered user may log into the console;
-    # what they see afterward depends on get_admin_apps_for_user(), not on
-    # an app-level access gate the way a regular consuming app would use.
+    # Gated on admin_console access like any other app -- every user gets
+    # that access automatically via the basic_user group (create_user() /
+    # run_initial_setup()), so this still means "any registered account may
+    # log in" in practice. What they see afterward still depends on
+    # get_admin_apps_for_user(), not on this gate. Also means console logins
+    # now get real app-scoped audit logging and session attribution instead
+    # of the NULL/NA placeholder require_app_key = NULL implied.
     # --------------------------------------------------------------------
 
-    auth <- authClient::authLoginServer("console_auth", .pkgenv$con, require_app_key = NULL)
+    auth <- authClient::authLoginServer("console_auth", .pkgenv$con, require_app_key = ADMIN_CONSOLE_KEY)
     authClient::changePasswordServer("console_pw", .pkgenv$con, auth$user_id)
+
+    # "Account" tab (currently just change-password, a natural home for
+    # other self-service settings later) is hidden until logged in, and
+    # re-hidden on logout -- there's nothing useful to show there otherwise.
+    hideTab(inputId = "main_nav", target = "account_tab")
+    observe({
+      if (isTRUE(auth$logged_in())) {
+        showTab(inputId = "main_nav", target = "account_tab")
+      } else {
+        hideTab(inputId = "main_nav", target = "account_tab")
+      }
+    })
+
+    output$change_password_area <- renderUI({
+      req(auth$checked())
+      if (!auth$logged_in()) return(NULL)
+      authClient::changePasswordUI("console_pw")
+    })
+
+    output$my_app_access_table <- renderTable({
+      req(auth$logged_in())
+      apps <- get_user_accessible_apps(auth$user_id())
+      data.frame(App = apps$name)
+    })
+
+    output$my_groups_table <- renderTable({
+      req(auth$logged_in())
+      groups <- get_groups_for_user(auth$user_id())
+      groups <- groups[groups$group_key != BASIC_USER_GROUP_KEY, ]
+      data.frame(Group = groups$name)
+    })
 
     refresh_trigger <- reactiveVal(0)
 
@@ -82,9 +117,7 @@ build_console_server <- function() {
             column(10, h4(paste("Logged in as", auth$username()))),
             column(2, actionButton("admin_logout_btn", "Log out"))
           ),
-          div(em("You don't administer any apps yet. Ask a Admin Console admin to grant you rights.")),
-          hr(),
-          authClient::changePasswordUI("console_pw")
+          div(em("You don't administer any apps yet. Ask a Admin Console admin to grant you rights."))
         ))
       }
 
@@ -93,8 +126,6 @@ build_console_server <- function() {
           column(8, h4(paste("Logged in as", auth$username()))),
           column(4, actionButton("admin_logout_btn", "Log out"))
         ),
-        hr(),
-        authClient::changePasswordUI("console_pw"),
         hr(),
         selectInput(
           "managing_app", "Managing:",

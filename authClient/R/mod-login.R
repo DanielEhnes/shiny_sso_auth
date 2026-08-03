@@ -29,6 +29,9 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
   ns <- shiny::NS(id)
   js <- paste(readLines(system.file("www/auth-cookie.js", package = "authClient")), collapse = "\n")
   shiny::tagList(
+    shiny::tags$head(
+      shiny::includeCSS(system.file("www/auth-forms.css", package = "authClient"))
+    ),
     shiny::tags$script(shiny::HTML(sprintf(
       "window.__AUTH_COOKIE_NAME__='%s';\nwindow.__AUTH_INPUT_ID__='%s';\n%s",
       cookie_name, ns("auth_cookie_in"), js
@@ -124,11 +127,11 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
     output$login_area <- shiny::renderUI({
       if (state$logged_in) return(NULL)
       shiny::req(state$checked)  # avoid flashing the form before the cookie check resolves
-      shiny::wellPanel(
-        shiny::h4("Log in"),
-        shiny::textInput(ns("username"), "Username"),
-        shiny::passwordInput(ns("password"), "Password"),
-        shiny::actionButton(ns("login_btn"), "Log in", class = "btn-primary"),
+      shiny::div(class = "auth-card login-box",
+        shiny::h3("Log in"),
+        shiny::textInput(ns("username"), "Username", placeholder = "username"),
+        shiny::passwordInput(ns("password"), "Password", placeholder = "password"),
+        shiny::actionButton(ns("login_btn"), "Log in", class = "btn btn-primary"),
         shiny::uiOutput(ns("login_message"))
       )
     })
@@ -137,11 +140,11 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
     shiny::observeEvent(input$login_btn, {
       res <- authenticate_user(con, trimws(input$username), input$password)
       if (!res$ok) {
-        output$login_message <- shiny::renderUI(shiny::div(style = "color: #b00020;", res$reason))
+        output$login_message <- shiny::renderUI(shiny::div(class = "login-error", res$reason))
         return()
       }
       if (!is.null(require_app_key) && !user_has_app_access(con, res$user_id, require_app_key)) {
-        output$login_message <- shiny::renderUI(shiny::div(style = "color: #b00020;", "You don't have access to this application."))
+        output$login_message <- shiny::renderUI(shiny::div(class = "login-error", "You don't have access to this application."))
         return()
       }
       sess <- create_session(con, res$user_id, session_secret,

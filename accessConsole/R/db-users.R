@@ -8,10 +8,23 @@ email_exists <- function(email) {
   DBI::dbGetQuery(.pkgenv$con, "SELECT COUNT(*) AS n FROM users WHERE email = ?", params = list(email))$n > 0
 }
 
+# Every created user automatically becomes a member of the basic_user
+# group (created lazily here if it doesn't exist yet) -- basic_user is
+# granted access to the console app in run_initial_setup(), so this is
+# what keeps "anyone with an account can log into the console" working
+# now that the console's login is access-gated rather than open to any
+# authenticated account.
 create_user <- function(username, email, password) {
   pw_hash <- sodium::password_store(password)
   user_uuid <- uuid::UUIDgenerate()
   DBI::dbExecute(.pkgenv$con, "INSERT INTO users (user_id, username, email, password_hash, status, failed_login_count) VALUES (?, ?, ?, ?, 'active', 0)", params = list(user_uuid, username, email, pw_hash))
+
+  if (!group_key_exists(BASIC_USER_GROUP_KEY)) {
+    create_group(BASIC_USER_GROUP_KEY, "Basic Users", "Automatically granted to every created user.")
+  }
+  add_user_to_group(get_group_id(BASIC_USER_GROUP_KEY), user_uuid, NA_character_)
+
+  invisible(user_uuid)
 }
 
 get_user_id <- function(username) {

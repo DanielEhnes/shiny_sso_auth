@@ -16,6 +16,11 @@
 #'   admin toggling it) is never silently overwritten by a subsequent
 #'   restart.
 #' @return Invisibly, the bootstrap admin's user ID.
+#' @details Also idempotently ensures a `basic_user` group exists, backfills
+#'   every existing user into it (so upgrading an existing database doesn't
+#'   lock anyone out once console login is access-gated), and -- only the
+#'   first time, same non-overriding pattern as `audit_log_enabled` -- grants
+#'   that group access to the console app.
 #' @export
 run_initial_setup <- function(admin_username, admin_email, admin_password = "admin",
                                audit_log_enabled = FALSE) {
@@ -48,6 +53,24 @@ run_initial_setup <- function(admin_username, admin_email, admin_password = "adm
   ")$n > 0
   if (!audit_setting_exists) {
     authClient::set_audit_log_enabled(.pkgenv$con, audit_log_enabled)
+  }
+
+  if (!group_key_exists(BASIC_USER_GROUP_KEY)) {
+    create_group(BASIC_USER_GROUP_KEY, "Basic Users", "Automatically granted to every created user.")
+  }
+  basic_group_id <- get_group_id(BASIC_USER_GROUP_KEY)
+
+  # Backfill: anyone created before this group existed -- including on an
+  # upgrade of an existing database -- still needs to be a member, or
+  # gating console login on admin_console access would lock them out.
+  DBI::dbExecute(.pkgenv$con, "
+    INSERT INTO group_user (group_id, user_id)
+    SELECT ?, u.user_id FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM group_user gu WHERE gu.group_id = ? AND gu.user_id = u.user_id)
+  ", params = list(basic_group_id, basic_group_id))
+
+  if (identical(get_group_app_access_status(basic_group_id, console_app_id), "none")) {
+    set_group_app_access_for_app(basic_group_id, console_app_id, TRUE)
   }
 
   invisible(admin_user_id)

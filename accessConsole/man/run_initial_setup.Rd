@@ -35,3 +35,10 @@ Invisibly, the bootstrap admin's user ID.
 Safe to call on every startup: only creates what's missing. Called
 automatically by [run_admin_console()].
 }
+\details{
+Also idempotently ensures a `basic_user` group exists, backfills
+  every existing user into it (so upgrading an existing database doesn't
+  lock anyone out once console login is access-gated), and -- only the
+  first time, same non-overriding pattern as `audit_log_enabled` -- grants
+  that group access to the console app.
+}

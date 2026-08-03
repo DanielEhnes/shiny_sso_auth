@@ -10,13 +10,18 @@
 #' @export
 changePasswordUI <- function(id) {
   ns <- shiny::NS(id)
-  shiny::wellPanel(
-    shiny::h4("Change password"),
-    shiny::passwordInput(ns("current_password"), "Current password"),
-    shiny::passwordInput(ns("new_password"), "New password"),
-    shiny::passwordInput(ns("new_password_confirm"), "Confirm new password"),
-    shiny::actionButton(ns("change_password_btn"), "Change password", class = "btn-sm btn-primary"),
-    shiny::uiOutput(ns("change_password_message"))
+  shiny::tagList(
+    shiny::tags$head(
+      shiny::includeCSS(system.file("www/auth-forms.css", package = "authClient"))
+    ),
+    shiny::div(class = "auth-card",
+      shiny::h4("Change password"),
+      shiny::passwordInput(ns("current_password"), "Current password"),
+      shiny::passwordInput(ns("new_password"), "New password"),
+      shiny::passwordInput(ns("new_password_confirm"), "Confirm new password"),
+      shiny::actionButton(ns("change_password_btn"), "Change password", class = "btn btn-primary"),
+      shiny::uiOutput(ns("change_password_message"))
+    )
   )
 }
 
@@ -52,12 +57,12 @@ changePasswordServer <- function(id, con, user_id) {
         msg <- "New password must be different from the current password."
       }
       if (!is.null(msg)) {
-        output$change_password_message <- shiny::renderUI(shiny::div(style = "color: #b00020;", msg))
+        output$change_password_message <- shiny::renderUI(shiny::div(class = "login-error", msg))
         return()
       }
       set_user_password(con, uid, new_pw)
       revoke_all_sessions_for_user(con, uid)
-      output$change_password_message <- shiny::renderUI(shiny::div(style = "color: #1a7d1a;", "Password changed."))
+      output$change_password_message <- shiny::renderUI(shiny::div(class = "login-success", "Password changed."))
       shiny::updateTextInput(session, "current_password", value = "")
       shiny::updateTextInput(session, "new_password", value = "")
       shiny::updateTextInput(session, "new_password_confirm", value = "")

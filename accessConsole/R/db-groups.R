@@ -2,6 +2,10 @@ group_key_exists <- function(group_key) {
   DBI::dbGetQuery(.pkgenv$con, "SELECT COUNT(*) AS n FROM groups WHERE group_key = ?", params = list(group_key))$n > 0
 }
 
+get_group_id <- function(group_key) {
+  DBI::dbGetQuery(.pkgenv$con, "SELECT group_id FROM groups WHERE group_key = ?", params = list(group_key))$group_id
+}
+
 create_group <- function(group_key, name, description) {
   group_uuid <- uuid::UUIDgenerate()
   DBI::dbExecute(.pkgenv$con, "

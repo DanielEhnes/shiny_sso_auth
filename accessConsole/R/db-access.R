@@ -21,6 +21,25 @@ get_user_app_access_status <- function(user_id, app_id) {
   if (nrow(row) == 0) "none" else row$status[1]
 }
 
+# Every app this user currently has active access to, whether granted
+# directly (user_app_access) or via any group they belong to
+# (group_app_access) -- for a self-service "your access" summary, not an
+# admin management view.
+get_user_accessible_apps <- function(user_id) {
+  DBI::dbGetQuery(.pkgenv$con, "
+    SELECT DISTINCT a.app_id, a.app_key, a.name
+    FROM apps a
+    WHERE a.app_id IN (
+      SELECT app_id FROM user_app_access WHERE user_id = ? AND status = 'active'
+    ) OR a.app_id IN (
+      SELECT ga.app_id FROM group_user gu
+      JOIN group_app_access ga ON ga.group_id = gu.group_id
+      WHERE gu.user_id = ? AND ga.status = 'active'
+    )
+    ORDER BY a.name
+  ", params = list(user_id, user_id))
+}
+
 set_group_app_access_for_app <- function(group_id, app_id, granted) {
   exists <- DBI::dbGetQuery(.pkgenv$con, "
     SELECT COUNT(*) AS n FROM group_app_access WHERE group_id = ? AND app_id = ?
