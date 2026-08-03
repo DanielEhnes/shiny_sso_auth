@@ -16,6 +16,10 @@ get_groups_admin_app_id <- function() {
   DBI::dbGetQuery(.pkgenv$con, "SELECT app_id FROM apps WHERE app_key = ?", params = list(GROUPS_ADMIN_KEY))$app_id[1]
 }
 
+get_activity_admin_app_id <- function() {
+  DBI::dbGetQuery(.pkgenv$con, "SELECT app_id FROM apps WHERE app_key = ?", params = list(ACTIVITY_ADMIN_KEY))$app_id[1]
+}
+
 get_all_apps <- function() {
   DBI::dbGetQuery(.pkgenv$con, "SELECT app_id, app_key, name FROM apps ORDER BY name")
 }
@@ -26,11 +30,12 @@ app_key_exists <- function(app_key) {
 
 # Cascades (via ON DELETE CASCADE on roles/permissions/user_app_access/
 # group_app_access) to remove everything scoped to this app. Refuses to
-# touch the console/groups pseudo-apps -- deleting either would break
-# is_console_context()/is_groups_context() in app-server.R.
+# touch the console/groups/activity pseudo-apps -- deleting any of them
+# would break is_console_context()/is_groups_context()/is_activity_context()
+# in app-server.R.
 delete_app <- function(app_id) {
   app_key <- DBI::dbGetQuery(.pkgenv$con, "SELECT app_key FROM apps WHERE app_id = ?", params = list(app_id))$app_key[1]
-  if (is.na(app_key) || app_key %in% c(ADMIN_CONSOLE_KEY, GROUPS_ADMIN_KEY)) {
+  if (is.na(app_key) || app_key %in% c(ADMIN_CONSOLE_KEY, GROUPS_ADMIN_KEY, ACTIVITY_ADMIN_KEY)) {
     stop("Refusing to delete a protected or unknown app.")
   }
   DBI::dbExecute(.pkgenv$con, "DELETE FROM apps WHERE app_id = ?", params = list(app_id))

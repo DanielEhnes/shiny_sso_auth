@@ -40,6 +40,14 @@ run_initial_setup <- function(admin_username, admin_email, admin_password = "adm
     set_role_permissions(role_id, c(permission_id))
   }
 
+  activity_admin_app_id <- get_activity_admin_app_id()
+  if (length(activity_admin_app_id) == 0 || is.na(activity_admin_app_id)) {
+    activity_admin_app_id <- create_app(ACTIVITY_ADMIN_KEY, "User Activity", "Read-only presence-activity view across all apps, derived from the audit log.")
+    permission_id <- create_permission("admin", "App Admin Role for User Activity App", activity_admin_app_id)
+    role_id <- create_role(paste0(ACTIVITY_ADMIN_KEY, "_admin"), "Admin Role for User Activity App", activity_admin_app_id)
+    set_role_permissions(role_id, c(permission_id))
+  }
+
   if (!email_exists(admin_email)) {
     create_user(username = admin_username, email = admin_email, password = admin_password)
   }
@@ -47,6 +55,7 @@ run_initial_setup <- function(admin_username, admin_email, admin_password = "adm
 
   grant_app_admin(admin_user_id, console_app_id, admin_user_id)
   grant_app_admin(admin_user_id, groups_admin_app_id, admin_user_id)
+  grant_app_admin(admin_user_id, activity_admin_app_id, admin_user_id)
 
   audit_setting_exists <- DBI::dbGetQuery(.pkgenv$con, "
     SELECT COUNT(*) AS n FROM auth_settings WHERE setting_key = 'audit_log_enabled'

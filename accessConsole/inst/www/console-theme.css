@@ -39,3 +39,43 @@
 .well .help-block {
   color: #14433E;
 }
+
+/* Big, pill-style toggle for radioButtons (e.g. the unique-users/total-
+   connections switch on the Activity page) instead of tiny native radio
+   circles. */
+.activity-metric-toggle .radio-inline {
+  display: inline-flex;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 16px 0 0;
+  padding: 10px 20px;
+  border: 2px solid #14433E;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Bootstrap's default .radio-inline styling takes the input out of
+   normal flow entirely (position: absolute, offset back into place with
+   a negative margin) so it can float over the label's reserved
+   padding-left. That fights both our pill border (circle rendered
+   outside it) and the flex layout above (an absolutely-positioned flex
+   child gets its static position computed separately, which is what
+   pushed it above the text instead of beside it). Put it back in normal
+   flow so it's just an ordinary flex item next to the <span>. */
+.activity-metric-toggle input[type="radio"] {
+  position: static;
+  transform: scale(1.4);
+  margin: 0 10px 0 0;
+  cursor: pointer;
+}
+
+.activity-metric-toggle .radio-inline:hover {
+  background-color: rgba(20, 67, 62, 0.08);
+}
+
+.activity-metric-toggle .radio-inline:has(input:checked) {
+  background-color: #14433E;
+  color: #ffffff;
+}

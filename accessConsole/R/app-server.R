@@ -156,8 +156,14 @@ build_console_server <- function() {
       managing_app_id() == get_groups_admin_app_id()
     })
 
+    is_activity_context <- reactive({
+      req(auth$logged_in())
+      managing_app_id() == get_activity_admin_app_id()
+    })
+
     # --------------------------------------------------------------------
-    # Branch: console context vs. groups context vs. regular-app context
+    # Branch: console context vs. groups context vs. activity context vs.
+    # regular-app context
     # --------------------------------------------------------------------
 
     output$app_management_ui <- renderUI({
@@ -167,6 +173,8 @@ build_console_server <- function() {
         console_panel_ui()
       } else if (is_groups_context()) {
         groups_panel_ui()
+      } else if (is_activity_context()) {
+        activity_panel_ui()
       } else {
         app_panel_ui(managing_app_id())
       }
@@ -180,7 +188,7 @@ build_console_server <- function() {
     console_panel_ui <- function() {
       all_apps <- get_all_apps()
       all_users <- get_all_users()
-      deletable_apps <- all_apps[!(all_apps$app_key %in% c(ADMIN_CONSOLE_KEY, GROUPS_ADMIN_KEY)), ]
+      deletable_apps <- all_apps[!(all_apps$app_key %in% c(ADMIN_CONSOLE_KEY, GROUPS_ADMIN_KEY, ACTIVITY_ADMIN_KEY)), ]
 
       tagList(
         wellPanel(
@@ -820,5 +828,67 @@ build_console_server <- function() {
       pending_delete_group$name <- NULL
       refresh_trigger(refresh_trigger() + 1)
     })
+
+    # ====================================================================
+    # ACTIVITY CONTEXT: read-only view over the audit log. Independently
+    # grantable via the console's "Grant/Revoke app_admin rights" UI,
+    # targeting the "User Activity" pseudo-app. Shows nothing useful unless
+    # audit logging is enabled (authClient::is_audit_log_enabled()).
+    # ====================================================================
+
+    activity_panel_ui <- function() {
+      tagList(
+        div(class = "activity-metric-toggle",
+          radioButtons("activity_metric", NULL,
+            choices = c("Unique users" = "unique", "Total connections" = "total"),
+            inline = TRUE)
+        ),
+        wellPanel(
+          h4("Overall"),
+          uiOutput("activity_overall_stats")
+        ),
+        wellPanel(
+          h4("Per app"),
+          tableOutput("activity_app_table")
+        ),
+        wellPanel(
+          h4("Recent activity"),
+          DT::DTOutput("activity_recent_table")
+        )
+      )
+    }
+
+    metric_suffix <- reactive({
+      if (identical(input$activity_metric, "total")) "connections" else "unique_users"
+    })
+
+    output$activity_overall_stats <- renderUI({
+      req(is_activity_context())
+      counts <- get_overall_activity_counts()
+      suffix <- metric_suffix()
+      tagList(
+        p(paste("Last 7 days:", counts[[paste0(suffix, "_7d")]])),
+        p(paste("Last 30 days:", counts[[paste0(suffix, "_30d")]]))
+      )
+    })
+
+    output$activity_app_table <- renderTable({
+      req(is_activity_context())
+      by_app <- get_app_activity_by_window()
+      suffix <- metric_suffix()
+      data.frame(
+        App = by_app$app_name,
+        `Last 7 days` = by_app[[paste0(suffix, "_7d")]],
+        `Last 30 days` = by_app[[paste0(suffix, "_30d")]],
+        check.names = FALSE
+      )
+    })
+
+    output$activity_recent_table <- DT::renderDT({
+      req(is_activity_context())
+      recent <- get_recent_audit_events(200)
+      names(recent) <- c("User", "App", "Event", "When")
+      recent
+    }, options = list(pageLength = 15), rownames = FALSE)
   }
 }

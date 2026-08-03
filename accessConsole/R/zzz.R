@@ -8,4 +8,5 @@
 
 ADMIN_CONSOLE_KEY <- "admin_console"
 GROUPS_ADMIN_KEY <- "groups_admin"
+ACTIVITY_ADMIN_KEY <- "activity_admin"
 BASIC_USER_GROUP_KEY <- "basic_user"
