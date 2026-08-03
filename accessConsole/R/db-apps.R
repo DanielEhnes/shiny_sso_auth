@@ -1,6 +1,17 @@
-create_app <- function(app_key, name, description) {
+# url/owner_contact/icon_url/tooltip_text are the landing-zone tile
+# fields (see register_landing_app()) -- optional here since the app
+# creator may not know them yet (e.g. the app isn't deployed). A NULL
+# has length 0, which DBI's parameter binding rejects, so NULL is
+# converted to NA_character_ (a proper length-1 SQL NULL) before binding.
+create_app <- function(app_key, name, description, url = NULL, owner_contact = NULL,
+                        icon_url = NULL, tooltip_text = NULL) {
+  na_if_null <- function(x) if (is.null(x)) NA_character_ else x
   app_uuid <- uuid::UUIDgenerate()
-  DBI::dbExecute(.pkgenv$con, "INSERT INTO apps (app_id, is_active, app_key, name, description) VALUES (?, ?, ?, ?, ?)", params = list(app_uuid, TRUE, app_key, name, description))
+  DBI::dbExecute(.pkgenv$con, "
+    INSERT INTO apps (app_id, is_active, app_key, name, description, url, owner_contact, icon_url, tooltip_text)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ", params = list(app_uuid, TRUE, app_key, name, description,
+                    na_if_null(url), na_if_null(owner_contact), na_if_null(icon_url), na_if_null(tooltip_text)))
   return(app_uuid)
 }
 

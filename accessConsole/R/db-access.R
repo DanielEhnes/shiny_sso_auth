@@ -40,6 +40,29 @@ get_user_accessible_apps <- function(user_id) {
   ", params = list(user_id, user_id))
 }
 
+# Every app registered for the landing zone (has a url configured, and
+# isn't one of the console's own pseudo-apps), regardless of whether this
+# user has access -- has_access lets the UI render locked/unlocked tiles
+# so users can discover apps and see who to contact for ones they don't
+# have yet.
+get_landing_apps_for_user <- function(user_id) {
+  DBI::dbGetQuery(.pkgenv$con, "
+    SELECT a.app_id, a.app_key, a.name, a.description, a.tooltip_text,
+      a.url, a.icon_url, a.owner_contact,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM user_app_access WHERE user_id = ? AND app_id = a.app_id AND status = 'active'
+      ) OR EXISTS (
+        SELECT 1 FROM group_user gu
+        JOIN group_app_access ga ON ga.group_id = gu.group_id
+        WHERE gu.user_id = ? AND ga.app_id = a.app_id AND ga.status = 'active'
+      ) THEN 1 ELSE 0 END AS has_access
+    FROM apps a
+    WHERE a.url IS NOT NULL
+      AND a.app_key NOT IN (?, ?, ?)
+    ORDER BY has_access DESC, a.name
+  ", params = list(user_id, user_id, ADMIN_CONSOLE_KEY, GROUPS_ADMIN_KEY, ACTIVITY_ADMIN_KEY))
+}
+
 set_group_app_access_for_app <- function(group_id, app_id, granted) {
   exists <- DBI::dbGetQuery(.pkgenv$con, "
     SELECT COUNT(*) AS n FROM group_app_access WHERE group_id = ? AND app_id = ?

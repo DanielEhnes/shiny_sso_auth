@@ -166,6 +166,14 @@ class App(Base):
     description: Mapped[str | None] = mapped_column(Text)
 
     owner_contact: Mapped[str | None] = mapped_column(Text)
+
+    # Landing Zone tile fields (accessConsole's Home page): where to send
+    # a user who clicks this app, its icon, and a hover-only blurb
+    # distinct from `description` (which is the tile's always-visible text).
+    url: Mapped[str | None] = mapped_column(Text)
+    icon_url: Mapped[str | None] = mapped_column(Text)
+    tooltip_text: Mapped[str | None] = mapped_column(Text)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
