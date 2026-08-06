@@ -23,6 +23,32 @@
   background-color: #236D63;
 }
 
+/* Top-right navbar area (Account + Logout). Bootstrap 3's own
+   .navbar-nav > li already floats left by default (!important beats
+   that); Account keeps its normal DOM position inside #main_nav (see
+   app-ui.R's comment on its tabPanel() for why it can never be moved),
+   it's just repositioned visually. Logout is a plain <li>, inserted
+   immediately before Account's -- CSS stacks earlier-source-order
+   right floats furthest right, so this insertion order puts Account to
+   Logout's left. */
+#main_nav li:has(> a[data-value="account_tab"]),
+.navbar-right-item {
+  float: right !important;
+}
+
+/* Bootstrap's own tab links center vertically via top/bottom padding
+   (padding-based, matching the navbar's 50px height) -- Logout's actual
+   clickable link sits inside uiOutput()'s own wrapper span, one level
+   deeper than a real tab's <a>, so that padding rule doesn't reach it.
+   Flexbox centers it regardless of that extra nesting. margin-left is
+   the gap to Account, its neighbor in the float stack. */
+.navbar-right-item {
+  height: 50px !important;
+  display: flex !important;
+  align-items: center;
+  margin-left: 12px;
+}
+
 .well {
   background-color: #ffffff;
   color: #14433E;
@@ -82,14 +108,26 @@
 
 /* Landing Zone app tiles. Same rounded/shadow shape as authClient's
    .auth-card, but a fixed tile width (card-deck layout) instead of
-   .auth-card's centered-form max-width, and a dark-teal fill (rather
-   than white, like the .well/.auth-card boxes) so these read as a
-   distinct kind of box -- a deliberate callback to example.R's solid
-   bg-primary cards. */
+   .auth-card's centered-form max-width, and a dark fill (rather than
+   white, like the .well/.auth-card boxes) so these read as a distinct
+   kind of box -- matching the navbar's #131921, a deliberate callback
+   to example.R's solid bg-primary cards. */
 .landing-card-deck {
   display: flex;
   flex-wrap: wrap;
   gap: 24px;
+}
+
+/* Groups a card with its contact info as one flex item -- contact is
+   centered below the card, and the two wrap together as a unit inside
+   .landing-card-deck instead of being separate top-level flex children
+   (which was the bug: flex-wrap could split a card from its own contact
+   line onto different rows). */
+.landing-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 .landing-card {
@@ -97,7 +135,7 @@
   padding: 24px;
   border-radius: 10px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, .10);
-  background-color: #14433E;
+  background-color: #131921;
   color: #FFFFF2;
   cursor: pointer;
 }
@@ -129,7 +167,7 @@
   height: 40px;
   border-radius: 50%;
   background-color: #FFFFF2;
-  color: #14433E;
+  color: #131921;
   font-weight: 700;
 }
 
@@ -139,7 +177,7 @@
 }
 
 .landing-card-contact {
-  margin-top: 6px;
+  max-width: 300px;
   text-align: center;
   color: #14433E;
 }
