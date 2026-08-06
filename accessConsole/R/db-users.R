@@ -35,6 +35,10 @@ get_all_users <- function() {
   DBI::dbGetQuery(.pkgenv$con, "SELECT user_id, username, email, status, created_at FROM users ORDER BY created_at DESC")
 }
 
+get_user_email <- function(user_id) {
+  DBI::dbGetQuery(.pkgenv$con, "SELECT email FROM users WHERE user_id = ?", params = list(user_id))$email[1]
+}
+
 set_user_status <- function(user_id, new_status) {
   DBI::dbExecute(.pkgenv$con, "UPDATE users SET status = ? WHERE user_id = ?", params = list(new_status, user_id))
 }

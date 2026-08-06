@@ -75,15 +75,46 @@ build_console_server <- function() {
     })
 
     # ------------------------------------------------------------------
+    # Top-right navbar area: Account (username + person icon) followed by
+    # Logout (power-off icon) -- replaces what used to be three separate
+    # "Logged in as X / Log out" spots (Landing Zone, and both branches
+    # of admin_area). Account stays a normal tab in its normal DOM
+    # position (see the comment on its tabPanel() in app-ui.R for why --
+    # showTab()/hideTab() resolve tabs by searching inside #main_nav, so
+    # relocating it would break login/logout) -- it's positioned
+    # top-right by CSS float alone (console-theme.css). Logout is a new,
+    # plain <li>, inserted once per session immediately before Account's
+    # <li> -- both float:right, and CSS stacks earlier-in-source-order
+    # floats furthest right, so this insertion order puts Account to
+    # Logout's *left*, without moving anything that already existed.
+    # ------------------------------------------------------------------
+
+    insertUI(
+      selector = '#main_nav li:has(> a[data-value="account_tab"])',
+      where = "beforeBegin",
+      ui = tags$li(class = "navbar-right-item", uiOutput("navbar_logout_area", inline = TRUE))
+    )
+
+    observe({
+      req(auth$logged_in())
+      session$sendCustomMessage("set_account_tab_label", auth$username())
+    })
+
+    output$navbar_logout_area <- renderUI({
+      req(auth$logged_in())
+      actionLink("navbar_logout_btn", tagList(icon("power-off"), " Logout"), style = "color:#FFFFF2; font-weight:600;")
+    })
+
+    observeEvent(input$navbar_logout_btn, {
+      auth$logout()
+    })
+
+    # ------------------------------------------------------------------
     # Landing Zone: the first tab. Shows a card-deck of every registered
     # app once logged in -- both apps the user already has access to
     # (clickable) and ones they don't yet (locked, but still shown so
     # they can see who to ask -- see get_landing_apps_for_user()).
     # ------------------------------------------------------------------
-
-    observeEvent(input$landing_logout_btn, {
-      auth$logout()
-    })
 
     output$landing_zone_ui <- renderUI({
       req(auth$checked())
@@ -113,13 +144,18 @@ build_console_server <- function() {
         card_attrs <- list(
           class = if (locked) "landing-card locked" else "landing-card",
           `data-toggle` = if (has_tooltip) "tooltip" else NULL,
+          `data-placement` = if (has_tooltip) "bottom" else NULL,
           title = if (has_tooltip) app$tooltip_text else NULL,
           onclick = if (!locked) sprintf("window.open('%s', '_blank')", app$url) else NULL
         )
 
         description <- if (!is.na(app$description) && nzchar(app$description)) p(app$description) else NULL
 
-        tagList(
+        # Wrapped together (not just adjacent tagList siblings) so the
+        # card and its contact info are one flex item inside
+        # .landing-card-deck -- contact is centered below the card, and
+        # the two move/wrap together as a unit.
+        div(class = "landing-card-wrapper",
           do.call(div, c(card_attrs, list(
             icon,
             h4(app$name),
@@ -130,9 +166,6 @@ build_console_server <- function() {
       })
 
       tagList(
-        h4(paste("Logged in as", auth$username())),
-        actionButton("landing_logout_btn", "Log out"),
-        hr(),
         div(class = "landing-card-deck", cards),
         tags$script(HTML("$('[data-toggle=\"tooltip\"]').tooltip();"))
       )
@@ -142,6 +175,16 @@ build_console_server <- function() {
       req(auth$checked())
       if (!auth$logged_in()) return(NULL)
       authClient::changePasswordUI("console_pw")
+    })
+
+    output$my_profile_info <- renderUI({
+      req(auth$logged_in())
+      org_unit <- authClient::get_user_org_unit(.pkgenv$con, auth$user_id())
+      tagList(
+        p(strong("Username: "), auth$username()),
+        p(strong("Email: "), get_user_email(auth$user_id())),
+        if (!is.null(org_unit)) p(strong("Organizational Unit: "), org_unit$name) else NULL
+      )
     })
 
     output$my_app_access_table <- renderTable({
@@ -182,20 +225,11 @@ build_console_server <- function() {
 
       if (nrow(admin_apps) == 0) {
         return(fluidPage(
-          fluidRow(
-            column(10, h4(paste("Logged in as", auth$username()))),
-            column(2, actionButton("admin_logout_btn", "Log out"))
-          ),
           div(em("You don't administer any apps yet. Ask a Admin Console admin to grant you rights."))
         ))
       }
 
       fluidPage(
-        fluidRow(
-          column(8, h4(paste("Logged in as", auth$username()))),
-          column(4, actionButton("admin_logout_btn", "Log out"))
-        ),
-        hr(),
         selectInput(
           "managing_app", "Managing:",
           choices = setNames(admin_apps$app_id, admin_apps$name),
@@ -204,10 +238,6 @@ build_console_server <- function() {
         ),
         uiOutput("app_management_ui")
       )
-    })
-
-    observeEvent(input$admin_logout_btn, {
-      auth$logout()
     })
 
     managing_app_id <- reactive({
