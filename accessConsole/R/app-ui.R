@@ -6,6 +6,18 @@ build_console_ui <- function() {
       shiny::includeCSS(system.file("www/console-theme.css", package = "accessConsole"))
     ),
 
+    # First tab: the normal login form (authLoginUI's own login_area output
+    # self-hides once logged in -- see authClient's mod-login.R), followed
+    # by the card-deck of registered apps once logged in.
+    shiny::tabPanel(
+      "Landing Zone", value = "landing_zone_tab",
+      shiny::fluidPage(
+        shiny::br(),
+        authClient::authLoginUI("console_auth"),
+        shiny::uiOutput("landing_zone_ui")
+      )
+    ),
+
     shiny::tabPanel(
       "Create Account",
       shiny::fluidPage(
@@ -21,11 +33,13 @@ build_console_ui <- function() {
       )
     ),
 
+    # Login form now lives on the Landing Zone tab -- authLoginUI() must
+    # only be called once, since it's a Shiny module with its own fixed
+    # namespaced output id.
     shiny::tabPanel(
-      "Admin",
+      "Admin", value = "admin_tab",
       shiny::fluidPage(
         shiny::br(),
-        authClient::authLoginUI("console_auth"),
         shiny::uiOutput("admin_area")
       )
     ),

@@ -54,6 +54,9 @@ ensure_core_schema <- function(con) {
       name TEXT NOT NULL,
       description TEXT,
       owner_contact TEXT,
+      url TEXT,
+      icon_url TEXT,
+      tooltip_text TEXT,
       is_active BOOLEAN NOT NULL DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (app_id),
@@ -80,6 +83,7 @@ ensure_core_schema <- function(con) {
       group_key TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
+      group_type TEXT NOT NULL DEFAULT 'standard' CHECK (group_type IN ('standard', 'org_unit')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (group_id),
       UNIQUE (group_key)

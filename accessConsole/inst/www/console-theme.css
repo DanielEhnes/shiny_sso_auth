@@ -79,3 +79,71 @@
   background-color: #14433E;
   color: #ffffff;
 }
+
+/* Landing Zone app tiles. Same rounded/shadow shape as authClient's
+   .auth-card, but a fixed tile width (card-deck layout) instead of
+   .auth-card's centered-form max-width, and a dark-teal fill (rather
+   than white, like the .well/.auth-card boxes) so these read as a
+   distinct kind of box -- a deliberate callback to example.R's solid
+   bg-primary cards. */
+.landing-card-deck {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.landing-card {
+  width: 300px;
+  padding: 24px;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .10);
+  background-color: #14433E;
+  color: #FFFFF2;
+  cursor: pointer;
+}
+
+.landing-card h4 {
+  color: #FFFFF2;
+  margin: 12px 0;
+}
+
+.landing-card.locked {
+  background-color: #cfd3d2;
+  color: #5a5f5e;
+  cursor: default;
+}
+
+.landing-card.locked h4 {
+  color: #5a5f5e;
+}
+
+.landing-card-icon {
+  height: 40px;
+}
+
+.landing-card-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #FFFFF2;
+  color: #14433E;
+  font-weight: 700;
+}
+
+.landing-card.locked .landing-card-icon-badge {
+  background-color: #5a5f5e;
+  color: #cfd3d2;
+}
+
+.landing-card-contact {
+  margin-top: 6px;
+  text-align: center;
+  color: #14433E;
+}
+
+.landing-card-contact a {
+  color: #14433E;
+}

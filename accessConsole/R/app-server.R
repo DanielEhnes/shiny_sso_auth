@@ -58,15 +58,84 @@ build_console_server <- function() {
     authClient::changePasswordServer("console_pw", .pkgenv$con, auth$user_id)
 
     # "Account" tab (currently just change-password, a natural home for
-    # other self-service settings later) is hidden until logged in, and
-    # re-hidden on logout -- there's nothing useful to show there otherwise.
+    # other self-service settings later) and "Admin" tab (its own login
+    # form moved to the Landing Zone tab, so there's nothing useful to show
+    # here while logged out either) are both hidden until logged in, and
+    # re-hidden on logout.
     hideTab(inputId = "main_nav", target = "account_tab")
+    hideTab(inputId = "main_nav", target = "admin_tab")
     observe({
       if (isTRUE(auth$logged_in())) {
         showTab(inputId = "main_nav", target = "account_tab")
+        showTab(inputId = "main_nav", target = "admin_tab")
       } else {
         hideTab(inputId = "main_nav", target = "account_tab")
+        hideTab(inputId = "main_nav", target = "admin_tab")
       }
+    })
+
+    # ------------------------------------------------------------------
+    # Landing Zone: the first tab. Shows a card-deck of every registered
+    # app once logged in -- both apps the user already has access to
+    # (clickable) and ones they don't yet (locked, but still shown so
+    # they can see who to ask -- see get_landing_apps_for_user()).
+    # ------------------------------------------------------------------
+
+    observeEvent(input$landing_logout_btn, {
+      auth$logout()
+    })
+
+    output$landing_zone_ui <- renderUI({
+      req(auth$checked())
+      if (!auth$logged_in()) return(NULL)
+      refresh_trigger()
+
+      apps <- get_landing_apps_for_user(auth$user_id())
+
+      cards <- lapply(seq_len(nrow(apps)), function(i) {
+        app <- apps[i, ]
+        locked <- app$has_access == 0
+
+        icon <- if (!is.na(app$icon_url) && nzchar(app$icon_url)) {
+          tags$img(src = app$icon_url, class = "landing-card-icon")
+        } else {
+          div(class = "landing-card-icon-badge", toupper(substr(app$name, 1, 1)))
+        }
+
+        contact <- if (!is.na(app$owner_contact) && nzchar(app$owner_contact)) {
+          div(class = "landing-card-contact",
+            HTML(paste0("Ansprechpartner: <a href='mailto:", app$owner_contact, "'>", app$owner_contact, "</a>")))
+        } else {
+          NULL
+        }
+
+        has_tooltip <- !is.na(app$tooltip_text) && nzchar(app$tooltip_text)
+        card_attrs <- list(
+          class = if (locked) "landing-card locked" else "landing-card",
+          `data-toggle` = if (has_tooltip) "tooltip" else NULL,
+          title = if (has_tooltip) app$tooltip_text else NULL,
+          onclick = if (!locked) sprintf("window.open('%s', '_blank')", app$url) else NULL
+        )
+
+        description <- if (!is.na(app$description) && nzchar(app$description)) p(app$description) else NULL
+
+        tagList(
+          do.call(div, c(card_attrs, list(
+            icon,
+            h4(app$name),
+            description
+          ))),
+          contact
+        )
+      })
+
+      tagList(
+        h4(paste("Logged in as", auth$username())),
+        actionButton("landing_logout_btn", "Log out"),
+        hr(),
+        div(class = "landing-card-deck", cards),
+        tags$script(HTML("$('[data-toggle=\"tooltip\"]').tooltip();"))
+      )
     })
 
     output$change_password_area <- renderUI({
@@ -195,7 +264,12 @@ build_console_server <- function() {
           h4("Create a new app"),
           textInput("new_app_key", "App key (unique, e.g. 'invoicing')"),
           textInput("new_app_name", "Display name"),
-          textInput("new_app_description", "Description"),
+          textInput("new_app_description", "Description (also the Landing Zone card text)"),
+          helpText("The fields below are optional and only matter for the Landing Zone page -- leave them blank if you don't know them yet; the app owner can set/update them later via accessConsole::register_landing_app()."),
+          textInput("new_app_url", "Landing Zone URL"),
+          textInput("new_app_owner_contact", "Contact email"),
+          textInput("new_app_icon_url", "Icon URL"),
+          textInput("new_app_tooltip_text", "Tooltip text (shown on hover, separate from the description above)"),
           actionButton("create_app_btn", "Create app", class = "btn-sm btn-primary"),
           uiOutput("create_app_message")
         ),
@@ -241,6 +315,11 @@ build_console_server <- function() {
       key <- as.character(trimws(input$new_app_key))
       app_name <- as.character(trimws(input$new_app_name))
       description <- as.character(trimws(input$new_app_description))
+      blank_to_null <- function(x) if (nzchar(x)) x else NULL
+      url <- blank_to_null(trimws(input$new_app_url))
+      owner_contact <- blank_to_null(trimws(input$new_app_owner_contact))
+      icon_url <- blank_to_null(trimws(input$new_app_icon_url))
+      tooltip_text <- blank_to_null(trimws(input$new_app_tooltip_text))
       msg <- NULL
       if (key == "" || app_name == "") {
         msg <- "App key and name are both required."
@@ -257,13 +336,19 @@ build_console_server <- function() {
         output$create_app_message <- renderUI(div(style = "color: #b00020;", msg))
         return()
       }
-      app_id <- create_app(key, app_name, description)
+      app_id <- create_app(key, app_name, description, url = url, owner_contact = owner_contact,
+                           icon_url = icon_url, tooltip_text = tooltip_text)
       permission_id <- create_permission("admin", paste0("App Admin Role for ", app_name), app_id)
       role_id <- create_role(paste0(key, "_admin"), paste0("Admin Role for ", app_name), app_id)
       set_role_permissions(role_id, c(permission_id))
       output$create_app_message <- renderUI(div(style = "color: #1a7d1a;", paste0("App '", app_name, "' created.")))
       updateTextInput(session, "new_app_key", value = "")
       updateTextInput(session, "new_app_name", value = "")
+      updateTextInput(session, "new_app_description", value = "")
+      updateTextInput(session, "new_app_url", value = "")
+      updateTextInput(session, "new_app_owner_contact", value = "")
+      updateTextInput(session, "new_app_icon_url", value = "")
+      updateTextInput(session, "new_app_tooltip_text", value = "")
       refresh_trigger(refresh_trigger() + 1)
     })
 
@@ -694,6 +779,7 @@ build_console_server <- function() {
     groups_panel_ui <- function() {
       all_groups <- get_all_groups()
       all_users <- get_all_users()
+      org_units <- get_org_units()
 
       tagList(
         wellPanel(
@@ -701,8 +787,24 @@ build_console_server <- function() {
           textInput("new_group_key", "Group key (unique, e.g. 'reporting-team')"),
           textInput("new_group_name", "Display name"),
           textInput("new_group_description", "Description"),
+          radioButtons("new_group_type", "Type",
+            choices = c("Standard" = "standard", "Organizational Unit" = "org_unit"), inline = TRUE),
+          helpText("Organizational Unit groups are mutually exclusive -- assigning a user to one automatically removes any other. Use the panel below to assign users, not the generic membership panel."),
           actionButton("create_group_btn", "Create group", class = "btn-sm btn-primary"),
           uiOutput("create_group_message")
+        ),
+        wellPanel(
+          h4("Set a user's organizational unit"),
+          if (nrow(org_units) == 0) {
+            helpText("No Organizational Unit groups exist yet -- create one above first.")
+          } else {
+            tagList(
+              selectInput("org_unit_target_user", "User", choices = setNames(all_users$user_id, all_users$email), selected = keep_selected(input$org_unit_target_user, all_users$user_id)),
+              uiOutput("org_unit_select_ui"),
+              actionButton("save_org_unit_btn", "Save", class = "btn-sm btn-primary"),
+              uiOutput("save_org_unit_message")
+            )
+          }
         ),
         wellPanel(
           h4("Group membership"),
@@ -754,11 +856,29 @@ build_console_server <- function() {
         output$create_group_message <- renderUI(div(style = "color: #b00020;", msg))
         return()
       }
-      create_group(key, group_name, description)
+      create_group(key, group_name, description, group_type = input$new_group_type)
       output$create_group_message <- renderUI(div(style = "color: #1a7d1a;", paste0("Group '", group_name, "' created.")))
       updateTextInput(session, "new_group_key", value = "")
       updateTextInput(session, "new_group_name", value = "")
       updateTextInput(session, "new_group_description", value = "")
+      refresh_trigger(refresh_trigger() + 1)
+    })
+
+    output$org_unit_select_ui <- renderUI({
+      req(input$org_unit_target_user)
+      refresh_trigger()
+      org_units <- get_org_units()
+      current <- get_user_org_unit(as.character(input$org_unit_target_user))
+      selectInput("org_unit_select", "Organizational Unit",
+        choices = setNames(org_units$group_id, org_units$name),
+        selected = if (nrow(current) > 0) current$group_id[1] else org_units$group_id[1])
+    })
+
+    output$save_org_unit_message <- renderUI(NULL)
+    observeEvent(input$save_org_unit_btn, {
+      req(input$org_unit_target_user, input$org_unit_select)
+      set_user_org_unit(as.character(input$org_unit_target_user), as.character(input$org_unit_select), auth$user_id())
+      output$save_org_unit_message <- renderUI(div(style = "color: #1a7d1a;", "Saved."))
       refresh_trigger(refresh_trigger() + 1)
     })
 

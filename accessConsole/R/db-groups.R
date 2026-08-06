@@ -6,16 +6,48 @@ get_group_id <- function(group_key) {
   DBI::dbGetQuery(.pkgenv$con, "SELECT group_id FROM groups WHERE group_key = ?", params = list(group_key))$group_id
 }
 
-create_group <- function(group_key, name, description) {
+create_group <- function(group_key, name, description, group_type = "standard") {
   group_uuid <- uuid::UUIDgenerate()
   DBI::dbExecute(.pkgenv$con, "
-    INSERT INTO groups (group_id, group_key, name, description) VALUES (?, ?, ?, ?)
-  ", params = list(group_uuid, group_key, name, description))
+    INSERT INTO groups (group_id, group_key, name, description, group_type) VALUES (?, ?, ?, ?, ?)
+  ", params = list(group_uuid, group_key, name, description, group_type))
   return(group_uuid)
 }
 
 get_all_groups <- function() {
-  DBI::dbGetQuery(.pkgenv$con, "SELECT group_id, group_key, name, description FROM groups ORDER BY name")
+  DBI::dbGetQuery(.pkgenv$con, "SELECT group_id, group_key, name, description, group_type FROM groups ORDER BY name")
+}
+
+# Organizational units are just groups flagged group_type = 'org_unit' --
+# group_app_access already works for them for free (see setup.R's
+# design note); the only extra rule is exclusivity, enforced by
+# set_user_org_unit() below, not by the schema.
+get_org_units <- function() {
+  DBI::dbGetQuery(.pkgenv$con, "SELECT group_id, group_key, name FROM groups WHERE group_type = 'org_unit' ORDER BY name")
+}
+
+get_user_org_unit <- function(user_id) {
+  DBI::dbGetQuery(.pkgenv$con, "
+    SELECT g.group_id, g.group_key, g.name
+    FROM group_user gu JOIN groups g ON g.group_id = gu.group_id
+    WHERE gu.user_id = ? AND g.group_type = 'org_unit'
+  ", params = list(user_id))
+}
+
+# The exclusivity enforcement point: removes any existing org_unit-typed
+# membership before adding the new one, inside a transaction so a user is
+# never briefly in zero or two org units.
+set_user_org_unit <- function(user_id, org_unit_group_id, added_by) {
+  pool::poolWithTransaction(.pkgenv$con, function(conn) {
+    DBI::dbExecute(conn, "
+      DELETE FROM group_user
+      WHERE user_id = ?
+      AND group_id IN (SELECT group_id FROM groups WHERE group_type = 'org_unit')
+    ", params = list(user_id))
+    DBI::dbExecute(conn, "
+      INSERT INTO group_user (group_id, user_id, added_by) VALUES (?, ?, ?)
+    ", params = list(org_unit_group_id, user_id, added_by))
+  })
 }
 
 get_group_members <- function(group_id) {

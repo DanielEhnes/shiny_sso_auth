@@ -146,7 +146,12 @@ class Group(Base):
     group_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)  # e.g. "group-xyz"
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    
+
+    # "org_unit" groups are exclusive (at most one per user, enforced by
+    # accessConsole's set_user_org_unit(), not by the schema) -- everything
+    # else ("standard") is the normal many-to-many group.
+    group_type: Mapped[str] = mapped_column(Text, default="standard", nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     #Relationships
@@ -166,6 +171,14 @@ class App(Base):
     description: Mapped[str | None] = mapped_column(Text)
 
     owner_contact: Mapped[str | None] = mapped_column(Text)
+
+    # Landing Zone tile fields (accessConsole's Home page): where to send
+    # a user who clicks this app, its icon, and a hover-only blurb
+    # distinct from `description` (which is the tile's always-visible text).
+    url: Mapped[str | None] = mapped_column(Text)
+    icon_url: Mapped[str | None] = mapped_column(Text)
+    tooltip_text: Mapped[str | None] = mapped_column(Text)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
