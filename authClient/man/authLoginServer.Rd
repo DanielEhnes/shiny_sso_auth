@@ -40,7 +40,9 @@ database.}
 }
 \value{
 A list of reactives/functions: `logged_in()`, `checked()`,
-  `user_id()`, `username()`, `has_permission(app_key, permission_name)`,
+  `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
+  `name`, or `NULL` if the user has no organizational unit -- see
+  [get_user_org_unit()]), `has_permission(app_key, permission_name)`,
   and `logout()`.
 }
 \description{

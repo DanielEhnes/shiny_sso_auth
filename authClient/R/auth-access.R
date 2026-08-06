@@ -66,3 +66,29 @@ user_has_permission <- function(con, user_id, app_key, permission_name) {
     WHERE gu.user_id = ? AND p.app_id = ? AND p.permission_name = ?
   ", params = list(user_id, app_id, permission_name))$n > 0
 }
+
+#' Get a user's organizational unit
+#'
+#' Organizational units are ordinary groups flagged `group_type =
+#' 'org_unit'` (by `accessConsole`'s Groups Management panel) -- exclusive
+#' by convention (at most one per user, enforced by whoever writes
+#' `group_user`, not by this function), unlike regular multi-membership
+#' groups. Queries `groups`/`group_user` directly rather than depending on
+#' `accessConsole`, the same layering already used by
+#' [user_has_app_access()] for `group_app_access`.
+#'
+#' @param con A DBI connection or pool object.
+#' @param user_id The user's ID.
+#' @param group_type The group type to look for. Defaults to `"org_unit"`.
+#' @return A list with `group_key` and `name`, or `NULL` if the user has no
+#'   group of this type.
+#' @export
+get_user_org_unit <- function(con, user_id, group_type = "org_unit") {
+  row <- DBI::dbGetQuery(con, "
+    SELECT g.group_key, g.name
+    FROM group_user gu JOIN groups g ON g.group_id = gu.group_id
+    WHERE gu.user_id = ? AND g.group_type = ?
+  ", params = list(user_id, group_type))
+  if (nrow(row) == 0) return(NULL)
+  list(group_key = row$group_key[1], name = row$name[1])
+}

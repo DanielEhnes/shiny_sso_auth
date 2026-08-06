@@ -83,6 +83,7 @@ ensure_core_schema <- function(con) {
       group_key TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
+      group_type TEXT NOT NULL DEFAULT 'standard' CHECK (group_type IN ('standard', 'org_unit')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       PRIMARY KEY (group_id),
       UNIQUE (group_key)

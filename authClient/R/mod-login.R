@@ -65,7 +65,9 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
 #'   `has_permission()` result is cached per session before rechecking the
 #'   database.
 #' @return A list of reactives/functions: `logged_in()`, `checked()`,
-#'   `user_id()`, `username()`, `has_permission(app_key, permission_name)`,
+#'   `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
+#'   `name`, or `NULL` if the user has no organizational unit -- see
+#'   [get_user_org_unit()]), `has_permission(app_key, permission_name)`,
 #'   and `logout()`.
 #' @export
 authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
@@ -73,7 +75,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
                              require_app_key = NULL, permission_cache_ttl_secs = 8 * 3600) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    state <- shiny::reactiveValues(logged_in = FALSE, user_id = NULL, username = NULL, checked = FALSE)
+    state <- shiny::reactiveValues(logged_in = FALSE, user_id = NULL, username = NULL, org_unit = NULL, checked = FALSE)
 
     # Cache bounded by permission_cache_ttl_secs (not just session lifetime):
     # a tab-visibility check called on every render would otherwise re-hit
@@ -117,6 +119,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         state$logged_in <- TRUE
         state$user_id <- res$user_id
         state$username <- res$username
+        state$org_unit <- get_user_org_unit(con, res$user_id)
         if (!is.null(res$new_cookie_value)) push_cookie(res$new_cookie_value, res$max_age_secs)
         record_app_access(res$user_id)
       } else {
@@ -153,6 +156,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
       state$logged_in <- TRUE
       state$user_id <- res$user_id
       state$username <- res$username
+      state$org_unit <- get_user_org_unit(con, res$user_id)
       record_app_access(res$user_id)
     })
 
@@ -161,6 +165,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
       checked = shiny::reactive(state$checked),
       user_id = shiny::reactive(state$user_id),
       username = shiny::reactive(state$username),
+      org_unit = shiny::reactive(state$org_unit),
       has_permission = function(app_key, permission_name) {
         if (is.null(state$user_id)) return(FALSE)
         cache_key <- paste(state$user_id, app_key, permission_name, sep = "::")
@@ -178,6 +183,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         state$logged_in <- FALSE
         state$user_id <- NULL
         state$username <- NULL
+        state$org_unit <- NULL
         permission_cache <<- new.env(parent = emptyenv())
       }
     )

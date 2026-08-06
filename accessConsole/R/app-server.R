@@ -779,6 +779,7 @@ build_console_server <- function() {
     groups_panel_ui <- function() {
       all_groups <- get_all_groups()
       all_users <- get_all_users()
+      org_units <- get_org_units()
 
       tagList(
         wellPanel(
@@ -786,8 +787,24 @@ build_console_server <- function() {
           textInput("new_group_key", "Group key (unique, e.g. 'reporting-team')"),
           textInput("new_group_name", "Display name"),
           textInput("new_group_description", "Description"),
+          radioButtons("new_group_type", "Type",
+            choices = c("Standard" = "standard", "Organizational Unit" = "org_unit"), inline = TRUE),
+          helpText("Organizational Unit groups are mutually exclusive -- assigning a user to one automatically removes any other. Use the panel below to assign users, not the generic membership panel."),
           actionButton("create_group_btn", "Create group", class = "btn-sm btn-primary"),
           uiOutput("create_group_message")
+        ),
+        wellPanel(
+          h4("Set a user's organizational unit"),
+          if (nrow(org_units) == 0) {
+            helpText("No Organizational Unit groups exist yet -- create one above first.")
+          } else {
+            tagList(
+              selectInput("org_unit_target_user", "User", choices = setNames(all_users$user_id, all_users$email), selected = keep_selected(input$org_unit_target_user, all_users$user_id)),
+              uiOutput("org_unit_select_ui"),
+              actionButton("save_org_unit_btn", "Save", class = "btn-sm btn-primary"),
+              uiOutput("save_org_unit_message")
+            )
+          }
         ),
         wellPanel(
           h4("Group membership"),
@@ -839,11 +856,29 @@ build_console_server <- function() {
         output$create_group_message <- renderUI(div(style = "color: #b00020;", msg))
         return()
       }
-      create_group(key, group_name, description)
+      create_group(key, group_name, description, group_type = input$new_group_type)
       output$create_group_message <- renderUI(div(style = "color: #1a7d1a;", paste0("Group '", group_name, "' created.")))
       updateTextInput(session, "new_group_key", value = "")
       updateTextInput(session, "new_group_name", value = "")
       updateTextInput(session, "new_group_description", value = "")
+      refresh_trigger(refresh_trigger() + 1)
+    })
+
+    output$org_unit_select_ui <- renderUI({
+      req(input$org_unit_target_user)
+      refresh_trigger()
+      org_units <- get_org_units()
+      current <- get_user_org_unit(as.character(input$org_unit_target_user))
+      selectInput("org_unit_select", "Organizational Unit",
+        choices = setNames(org_units$group_id, org_units$name),
+        selected = if (nrow(current) > 0) current$group_id[1] else org_units$group_id[1])
+    })
+
+    output$save_org_unit_message <- renderUI(NULL)
+    observeEvent(input$save_org_unit_btn, {
+      req(input$org_unit_target_user, input$org_unit_select)
+      set_user_org_unit(as.character(input$org_unit_target_user), as.character(input$org_unit_select), auth$user_id())
+      output$save_org_unit_message <- renderUI(div(style = "color: #1a7d1a;", "Saved."))
       refresh_trigger(refresh_trigger() + 1)
     })
 
