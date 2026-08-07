@@ -145,6 +145,7 @@ build_console_server <- function() {
           class = if (locked) "landing-card locked" else "landing-card",
           `data-toggle` = if (has_tooltip) "tooltip" else NULL,
           `data-placement` = if (has_tooltip) "bottom" else NULL,
+          `data-html` = if (has_tooltip) "true" else NULL,
           title = if (has_tooltip) app$tooltip_text else NULL,
           onclick = if (!locked) sprintf("window.open('%s', '_blank')", app$url) else NULL
         )
@@ -157,8 +158,7 @@ build_console_server <- function() {
         # the two move/wrap together as a unit.
         div(class = "landing-card-wrapper",
           do.call(div, c(card_attrs, list(
-            icon,
-            h4(app$name),
+            div(class = "landing-card-header", icon, h4(app$name)),
             description
           ))),
           contact
@@ -304,6 +304,13 @@ build_console_server <- function() {
           uiOutput("create_app_message")
         ),
         wellPanel(
+          h4("Edit an app's Landing Zone details"),
+          selectInput("edit_app_target", "App", choices = setNames(all_apps$app_id, all_apps$name), selected = keep_selected(input$edit_app_target, all_apps$app_id)),
+          uiOutput("edit_app_fields_ui"),
+          actionButton("save_app_landing_btn", "Save", class = "btn-sm btn-primary"),
+          uiOutput("save_app_landing_message")
+        ),
+        wellPanel(
           h4("Grant app_admin rights"),
           helpText("This lets someone administer roles, permissions, and user access for the chosen app -- or, if you pick Admin Console, lets them do everything you can do here."),
           selectInput("grant_target_app", "App", choices = setNames(all_apps$app_id, all_apps$name), selected = keep_selected(input$grant_target_app, all_apps$app_id)),
@@ -379,6 +386,36 @@ build_console_server <- function() {
       updateTextInput(session, "new_app_owner_contact", value = "")
       updateTextInput(session, "new_app_icon_url", value = "")
       updateTextInput(session, "new_app_tooltip_text", value = "")
+      refresh_trigger(refresh_trigger() + 1)
+    })
+
+    output$edit_app_fields_ui <- renderUI({
+      req(input$edit_app_target)
+      refresh_trigger()
+      current <- get_app_details(as.character(input$edit_app_target))
+      na_to_blank <- function(x) if (is.na(x)) "" else x
+      tagList(
+        textInput("edit_app_description", "Description (also the Landing Zone card text)", value = na_to_blank(current$description[1])),
+        textInput("edit_app_url", "Landing Zone URL", value = na_to_blank(current$url[1])),
+        textInput("edit_app_owner_contact", "Contact email", value = na_to_blank(current$owner_contact[1])),
+        textInput("edit_app_icon_url", "Icon URL", value = na_to_blank(current$icon_url[1])),
+        textInput("edit_app_tooltip_text", "Tooltip text (shown on hover, separate from the description above)", value = na_to_blank(current$tooltip_text[1]))
+      )
+    })
+
+    output$save_app_landing_message <- renderUI(NULL)
+    observeEvent(input$save_app_landing_btn, {
+      req(input$edit_app_target)
+      blank_to_na <- function(x) if (nzchar(trimws(x))) trimws(x) else NA_character_
+      update_app_landing_info(
+        as.character(input$edit_app_target),
+        description = blank_to_na(input$edit_app_description),
+        url = blank_to_na(input$edit_app_url),
+        owner_contact = blank_to_na(input$edit_app_owner_contact),
+        icon_url = blank_to_na(input$edit_app_icon_url),
+        tooltip_text = blank_to_na(input$edit_app_tooltip_text)
+      )
+      output$save_app_landing_message <- renderUI(div(style = "color: #1a7d1a;", "Saved."))
       refresh_trigger(refresh_trigger() + 1)
     })
 
