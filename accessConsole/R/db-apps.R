@@ -35,6 +35,25 @@ get_all_apps <- function() {
   DBI::dbGetQuery(.pkgenv$con, "SELECT app_id, app_key, name FROM apps ORDER BY name")
 }
 
+# The Landing Zone fields for one app, for pre-filling an edit form.
+get_app_details <- function(app_id) {
+  DBI::dbGetQuery(.pkgenv$con, "
+    SELECT app_id, app_key, name, description, url, owner_contact, icon_url, tooltip_text
+    FROM apps WHERE app_id = ?
+  ", params = list(app_id))
+}
+
+# Unlike create_app()'s optional params (NULL = "don't know it yet"),
+# this is a straightforward overwrite -- called from a form pre-filled
+# with the current values, so a blank field here means "clear this",
+# not "leave it alone".
+update_app_landing_info <- function(app_id, description, url, owner_contact, icon_url, tooltip_text) {
+  DBI::dbExecute(.pkgenv$con, "
+    UPDATE apps SET description = ?, url = ?, owner_contact = ?, icon_url = ?, tooltip_text = ?
+    WHERE app_id = ?
+  ", params = list(description, url, owner_contact, icon_url, tooltip_text, app_id))
+}
+
 app_key_exists <- function(app_key) {
   DBI::dbGetQuery(.pkgenv$con, "SELECT COUNT(*) AS n FROM apps WHERE app_key = ?", params = list(app_key))$n > 0
 }
