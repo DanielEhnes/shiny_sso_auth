@@ -75,11 +75,13 @@ shinyApp(ui, server)
 **Login module**
 - `authLoginUI(id, cookie_name = "app_sso")`
 - `authLoginServer(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"), cookie_name = "app_sso", cookie_domain = NULL, require_app_key = NULL, permission_cache_ttl_secs = 8*3600)` → list with:
-  - `logged_in()`, `checked()`, `user_id()`, `username()` — reactives
+  - `logged_in()`, `checked()`, `user_id()`, `username()`, `org_unit()` — reactives. `org_unit()` is `NULL`, or a list with `group_key`/`name`, if the user belongs to an organizational-unit-typed group (see `get_user_org_unit()`).
   - `has_permission(app_key, permission_name)` — cached per session (TTL-bounded, see below), unions direct `user_roles` and group-granted `group_roles`
   - `logout()` — revokes the session, clears the cookie, wipes the permission cache
 
   `require_app_key = NULL` means "just authenticate, no access gate" (what the console itself uses — any registered user may log in; what they see afterward is a separate, app-specific concern). Any other app should pass its own `app_key` and get gated by `user_has_app_access()`.
+
+  The same list is also stashed in `session$userData$authClient` (not just returned) — `session$userData` is shared across a module's entire nesting depth, unlike `input`/`output`, so a module several levels deep can reach `session$userData$authClient$user_id()` on its own rather than needing `auth` threaded through every intermediate function signature. Keyed by package name specifically, not something generic like `auth`, since `userData` has no enforced namespacing and a same-key collision would silently overwrite whichever assignment ran second.
 
 **Change password module**
 - `changePasswordUI(id)`

@@ -71,6 +71,8 @@ ensure_core_schema <- function(con) {
       status VARCHAR(16) NOT NULL,
       granted_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       revoked_at DATETIME,
+      valid_from DATETIME,
+      valid_until DATETIME,
       PRIMARY KEY (user_id, app_id),
       FOREIGN KEY(user_id) REFERENCES users (user_id) ON DELETE CASCADE,
       FOREIGN KEY(app_id) REFERENCES apps (app_id) ON DELETE CASCADE
@@ -97,6 +99,8 @@ ensure_core_schema <- function(con) {
       status VARCHAR(16) NOT NULL,
       granted_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
       revoked_at DATETIME,
+      valid_from DATETIME,
+      valid_until DATETIME,
       PRIMARY KEY (group_id, app_id),
       FOREIGN KEY(group_id) REFERENCES groups (group_id) ON DELETE CASCADE,
       FOREIGN KEY(app_id) REFERENCES apps (app_id) ON DELETE CASCADE

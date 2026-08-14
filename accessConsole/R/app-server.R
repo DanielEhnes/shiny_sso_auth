@@ -209,6 +209,13 @@ build_console_server <- function() {
       if (!is.null(current) && current %in% choices) current else default
     }
 
+    # dateInput(value = as.Date(NA)) warns ("Couldn't coerce the `value`
+    # argument to a date string...") -- it wants NULL for "no date", not
+    # an NA-valued Date. get_user/group_app_access_status() return NA
+    # (no window set, by far the common case), so every render of the
+    # access panels warned without this.
+    na_date_to_null <- function(x) if (is.na(x)) NULL else as.Date(x)
+
     # Holds the app/group awaiting a retype-the-key confirmation in a modal.
     pending_delete_app <- reactiveValues(app_id = NULL, app_key = NULL, name = NULL)
     pending_delete_group <- reactiveValues(group_id = NULL, group_key = NULL, name = NULL)
@@ -330,7 +337,8 @@ build_console_server <- function() {
           helpText("This affects every app the user has access to, not just one."),
           selectInput("status_target_user", "User", choices = setNames(all_users$user_id, paste0(all_users$email, " (", all_users$status, ")")), selected = keep_selected(input$status_target_user, all_users$user_id)),
           radioButtons("status_target_value", "Status", choices = c("Active" = "active", "Disabled" = "disabled"), inline = TRUE),
-          actionButton("save_account_status_btn", "Update account status", class = "btn-sm")
+          actionButton("save_account_status_btn", "Update account status", class = "btn-sm"),
+          uiOutput("account_status_message")
         ),
         wellPanel(
           h4("Delete an app"),
@@ -447,9 +455,26 @@ build_console_server <- function() {
       refresh_trigger(refresh_trigger() + 1)
     })
 
+    output$account_status_message <- renderUI(NULL)
     observeEvent(input$save_account_status_btn, {
       req(input$status_target_user)
-      set_user_status(as.character(input$status_target_user), input$status_target_value)
+      target_id <- as.character(input$status_target_user)
+
+      if (input$status_target_value != "active") {
+        console_app_id <- get_admin_console_app_id()
+        if (identical(target_id, auth$user_id())) {
+          output$account_status_message <- renderUI(helpText("You cannot disable your own account."))
+          return()
+        }
+        is_console_admin <- target_id %in% get_app_admins(console_app_id)$user_id
+        if (is_console_admin && check_if_last_admin(console_app_id) <= 1) {
+          output$account_status_message <- renderUI(helpText("This is the last admin, please do not disable."))
+          return()
+        }
+      }
+
+      set_user_status(target_id, input$status_target_value)
+      output$account_status_message <- renderUI(NULL)
       refresh_trigger(refresh_trigger() + 1)
     })
 
@@ -761,11 +786,20 @@ build_console_server <- function() {
       uid <- as.character(input$manage_user)
       roles <- get_roles_for_app(app_id)
 
-      current_access <- get_user_app_access_status(uid, app_id) == "active"
+      current <- get_user_app_access_status(uid, app_id)
+      current_access <- current$status == "active"
       current_roles <- get_user_role_ids_for_app(uid, app_id)
+      current_is_temporary <- !is.na(current$valid_from) || !is.na(current$valid_until)
 
       tagList(
         checkboxInput("user_has_access", "Has access to this app", value = current_access),
+        checkboxInput("user_access_is_temporary", "Temporary access (limit to a date range)", value = current_is_temporary),
+        conditionalPanel(
+          condition = "input.user_access_is_temporary",
+          helpText("Leave a field blank for an open-ended start/end."),
+          dateInput("user_access_valid_from", "Valid from", value = na_date_to_null(current$valid_from)),
+          dateInput("user_access_valid_until", "Valid until", value = na_date_to_null(current$valid_until))
+        ),
         if (nrow(roles) > 0) {
           checkboxGroupInput(
             "user_roles_for_app", "Roles for this app",
@@ -795,7 +829,10 @@ build_console_server <- function() {
         return()
       }
 
-      set_user_app_access_for_app(uid, app_id, isTRUE(input$user_has_access))
+      is_temporary <- isTRUE(input$user_access_is_temporary)
+      set_user_app_access_for_app(uid, app_id, isTRUE(input$user_has_access),
+                                   valid_from = if (is_temporary) input$user_access_valid_from else NULL,
+                                   valid_until = if (is_temporary) input$user_access_valid_until else NULL)
       set_user_roles_for_app(uid, app_id, new_role_ids)
       output$user_access_roles_message <- renderUI(NULL)
       refresh_trigger(refresh_trigger() + 1)
@@ -810,11 +847,20 @@ build_console_server <- function() {
       gid <- as.character(input$manage_group)
       roles <- get_roles_for_app(app_id)
 
-      current_access <- get_group_app_access_status(gid, app_id) == "active"
+      current <- get_group_app_access_status(gid, app_id)
+      current_access <- current$status == "active"
       current_roles <- get_group_role_ids_for_app(gid, app_id)
+      current_is_temporary <- !is.na(current$valid_from) || !is.na(current$valid_until)
 
       tagList(
         checkboxInput("group_has_access", "Has access to this app", value = current_access),
+        checkboxInput("group_access_is_temporary", "Temporary access (limit to a date range)", value = current_is_temporary),
+        conditionalPanel(
+          condition = "input.group_access_is_temporary",
+          helpText("Leave a field blank for an open-ended start/end."),
+          dateInput("group_access_valid_from", "Valid from", value = na_date_to_null(current$valid_from)),
+          dateInput("group_access_valid_until", "Valid until", value = na_date_to_null(current$valid_until))
+        ),
         if (nrow(roles) > 0) {
           checkboxGroupInput(
             "group_roles_for_app", "Roles for this app",
@@ -832,7 +878,10 @@ build_console_server <- function() {
       req(input$manage_group)
       app_id <- managing_app_id()
       gid <- as.character(input$manage_group)
-      set_group_app_access_for_app(gid, app_id, isTRUE(input$group_has_access))
+      is_temporary <- isTRUE(input$group_access_is_temporary)
+      set_group_app_access_for_app(gid, app_id, isTRUE(input$group_has_access),
+                                    valid_from = if (is_temporary) input$group_access_valid_from else NULL,
+                                    valid_until = if (is_temporary) input$group_access_valid_until else NULL)
       set_group_roles_for_app(gid, app_id, as.character(input$group_roles_for_app))
       refresh_trigger(refresh_trigger() + 1)
     })

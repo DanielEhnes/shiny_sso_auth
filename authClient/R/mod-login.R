@@ -68,7 +68,11 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
 #'   `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
 #'   `name`, or `NULL` if the user has no organizational unit -- see
 #'   [get_user_org_unit()]), `has_permission(app_key, permission_name)`,
-#'   and `logout()`.
+#'   and `logout()`. The same list is also stashed in
+#'   `session$userData$authClient`, so any module nested anywhere under
+#'   the app's top-level server can reach it (e.g.
+#'   `session$userData$authClient$user_id()`) without having `auth`
+#'   explicitly passed down to it.
 #' @export
 authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
                              cookie_name = "app_sso", cookie_domain = NULL,
@@ -160,7 +164,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
       record_app_access(res$user_id)
     })
 
-    list(
+    result <- list(
       logged_in = shiny::reactive(state$logged_in),
       checked = shiny::reactive(state$checked),
       user_id = shiny::reactive(state$user_id),
@@ -187,5 +191,16 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         permission_cache <<- new.env(parent = emptyenv())
       }
     )
+
+    # session$userData isn't namespaced by module (unlike input/output), so
+    # this is reachable from any module nested anywhere under the app's
+    # top-level server -- session$userData$authClient$user_id() -- without
+    # auth having to be threaded through every intermediate function
+    # signature. Keyed by package name, not something generic like "auth",
+    # since userData has no enforced namespacing and a collision would
+    # silently overwrite whichever assignment ran second.
+    session$userData$authClient <- result
+
+    result
   })
 }

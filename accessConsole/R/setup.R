@@ -78,7 +78,7 @@ run_initial_setup <- function(admin_username, admin_email, admin_password = "adm
     WHERE NOT EXISTS (SELECT 1 FROM group_user gu WHERE gu.group_id = ? AND gu.user_id = u.user_id)
   ", params = list(basic_group_id, basic_group_id))
 
-  if (identical(get_group_app_access_status(basic_group_id, console_app_id), "none")) {
+  if (identical(get_group_app_access_status(basic_group_id, console_app_id)$status, "none")) {
     set_group_app_access_for_app(basic_group_id, console_app_id, TRUE)
   }
 

@@ -7,7 +7,11 @@
 #' Check whether a user has access to an app
 #'
 #' Unions direct per-user grants (`user_app_access`) with grants via group
-#' membership (`group_app_access`).
+#' membership (`group_app_access`). A grant with `valid_from`/`valid_until`
+#' set only counts while the current time falls inside that window --
+#' evaluated live on every call, not by a background job that flips
+#' `status`, so an expired or not-yet-started grant is excluded instantly
+#' with no lag either side of the boundary.
 #'
 #' @param con A DBI connection or pool object.
 #' @param user_id The user's ID.
@@ -19,14 +23,19 @@ user_has_app_access <- function(con, user_id, app_key) {
   if (length(app_id) == 0) return(FALSE)
 
   direct <- DBI::dbGetQuery(con, "
-    SELECT status FROM user_app_access WHERE user_id = ? AND app_id = ?
+    SELECT 1 FROM user_app_access
+    WHERE user_id = ? AND app_id = ? AND status = 'active'
+      AND (valid_from IS NULL OR valid_from <= datetime('now'))
+      AND (valid_until IS NULL OR valid_until >= datetime('now'))
   ", params = list(user_id, app_id))
-  if (nrow(direct) > 0 && identical(direct$status[1], "active")) return(TRUE)
+  if (nrow(direct) > 0) return(TRUE)
 
   DBI::dbGetQuery(con, "
     SELECT COUNT(*) AS n FROM group_user gu
     JOIN group_app_access ga ON ga.group_id = gu.group_id
     WHERE gu.user_id = ? AND ga.app_id = ? AND ga.status = 'active'
+      AND (ga.valid_from IS NULL OR ga.valid_from <= datetime('now'))
+      AND (ga.valid_until IS NULL OR ga.valid_until >= datetime('now'))
   ", params = list(user_id, app_id))$n > 0
 }
 
