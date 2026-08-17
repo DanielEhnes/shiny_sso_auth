@@ -163,8 +163,19 @@
   color: #5a5f5e;
 }
 
+/* Icons (real <img> icons and the fallback initial-letter badge alike)
+   are black by default -- locked/no-access cards -- and switch to white
+   once unlocked. For real images, brightness(0)/invert(1) recolors
+   based on transparency shape alone, same trick as example.R's own
+   .icon-white; for the generated badge, background+text are swapped
+   directly since there's no image to filter. */
 .landing-card-icon {
   height: 40px;
+  filter: brightness(0);
+}
+
+.landing-card:not(.locked) .landing-card-icon {
+  filter: brightness(0) invert(1);
 }
 
 .landing-card-icon-badge {
@@ -174,14 +185,14 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background-color: #FFFFF2;
-  color: #131921;
+  background-color: #000000;
+  color: #FFFFFF;
   font-weight: 700;
 }
 
-.landing-card.locked .landing-card-icon-badge {
-  background-color: #5a5f5e;
-  color: #cfd3d2;
+.landing-card:not(.locked) .landing-card-icon-badge {
+  background-color: #FFFFFF;
+  color: #000000;
 }
 
 .landing-card-contact {

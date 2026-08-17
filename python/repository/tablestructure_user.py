@@ -208,6 +208,12 @@ class UserAppAccess(Base):
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Optional access window -- NULL/NULL means unbounded (the prior,
+    # still-default behavior). Evaluated live at query time by
+    # authClient::user_has_app_access(), not by a background job.
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     user: Mapped["User"] = relationship(back_populates="user_app_access")
     app: Mapped["App"] = relationship(back_populates="user_access_grants")
 
@@ -226,6 +232,9 @@ class GroupAppAccess(Base):
     status: Mapped[AppAccessStatus] = mapped_column(default=AppAccessStatus.active, nullable=False)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     group: Mapped["Group"] = relationship(back_populates="group_app_access")
     app: Mapped["App"] = relationship(back_populates="group_access_grants")

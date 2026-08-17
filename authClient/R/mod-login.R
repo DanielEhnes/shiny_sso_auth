@@ -68,7 +68,13 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
 #'   `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
 #'   `name`, or `NULL` if the user has no organizational unit -- see
 #'   [get_user_org_unit()]), `has_permission(app_key, permission_name)`,
-#'   and `logout()`.
+#'   `is_in_group(group_key)` (cached the same way as `has_permission()`
+#'   -- see [user_is_in_group()]), and `logout()`. The same list is also
+#'   stashed in
+#'   `session$userData$authClient`, so any module nested anywhere under
+#'   the app's top-level server can reach it (e.g.
+#'   `session$userData$authClient$user_id()`) without having `auth`
+#'   explicitly passed down to it.
 #' @export
 authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
                              cookie_name = "app_sso", cookie_domain = NULL,
@@ -160,7 +166,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
       record_app_access(res$user_id)
     })
 
-    list(
+    result <- list(
       logged_in = shiny::reactive(state$logged_in),
       checked = shiny::reactive(state$checked),
       user_id = shiny::reactive(state$user_id),
@@ -177,6 +183,22 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         permission_cache[[cache_key]] <- list(value = result, at = Sys.time())
         result
       },
+      # Generic group-membership check (see user_is_in_group()) -- e.g. a
+      # plain "team_leads" group, checked as auth$is_in_group("team_leads"),
+      # needs no schema or admin-UI work of its own since ordinary group
+      # management already covers creating it and adding/removing members.
+      # Cached the same way and for the same reason as has_permission().
+      is_in_group = function(group_key) {
+        if (is.null(state$user_id)) return(FALSE)
+        cache_key <- paste(state$user_id, "group", group_key, sep = "::")
+        cached <- permission_cache[[cache_key]]
+        if (!is.null(cached) && as.numeric(difftime(Sys.time(), cached$at, units = "secs")) < permission_cache_ttl_secs) {
+          return(cached$value)
+        }
+        result <- user_is_in_group(con, state$user_id, group_key)
+        permission_cache[[cache_key]] <- list(value = result, at = Sys.time())
+        result
+      },
       logout = function() {
         if (!is.null(input$auth_cookie_in) && nzchar(input$auth_cookie_in)) revoke_session(con, input$auth_cookie_in)
         clear_cookie()
@@ -187,5 +209,16 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         permission_cache <<- new.env(parent = emptyenv())
       }
     )
+
+    # session$userData isn't namespaced by module (unlike input/output), so
+    # this is reachable from any module nested anywhere under the app's
+    # top-level server -- session$userData$authClient$user_id() -- without
+    # auth having to be threaded through every intermediate function
+    # signature. Keyed by package name, not something generic like "auth",
+    # since userData has no enforced namespacing and a collision would
+    # silently overwrite whichever assignment ran second.
+    session$userData$authClient <- result
+
+    result
   })
 }

@@ -18,5 +18,9 @@ user_has_app_access(con, user_id, app_key)
 }
 \description{
 Unions direct per-user grants (`user_app_access`) with grants via group
-membership (`group_app_access`).
+membership (`group_app_access`). A grant with `valid_from`/`valid_until`
+set only counts while the current time falls inside that window --
+evaluated live on every call, not by a background job that flips
+`status`, so an expired or not-yet-started grant is excluded instantly
+with no lag either side of the boundary.
 }

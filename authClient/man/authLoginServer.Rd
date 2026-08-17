@@ -43,7 +43,13 @@ A list of reactives/functions: `logged_in()`, `checked()`,
   `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
   `name`, or `NULL` if the user has no organizational unit -- see
   [get_user_org_unit()]), `has_permission(app_key, permission_name)`,
-  and `logout()`.
+  `is_in_group(group_key)` (cached the same way as `has_permission()`
+  -- see [user_is_in_group()]), and `logout()`. The same list is also
+  stashed in
+  `session$userData$authClient`, so any module nested anywhere under
+  the app's top-level server can reach it (e.g.
+  `session$userData$authClient$user_id()`) without having `auth`
+  explicitly passed down to it.
 }
 \description{
 Checks for a valid session cookie on load (silent SSO reuse), falls back
