@@ -101,3 +101,26 @@ get_user_org_unit <- function(con, user_id, group_type = "org_unit") {
   if (nrow(row) == 0) return(NULL)
   list(group_key = row$group_key[1], name = row$name[1])
 }
+
+#' Check whether a user belongs to a given group
+#'
+#' Generic membership check by `group_key` -- deliberately not specific to
+#' any one concept (org units, "team leads", or anything else). Any group
+#' an admin creates via `accessConsole`'s existing Groups Management panel
+#' (ordinary `create_group()`/`add_user_to_group()`, no special setup)
+#' already works with this -- e.g. a plain "team_leads" group, checked
+#' with `user_is_in_group(con, user_id, "team_leads")`, needs no schema or
+#' admin-UI changes of its own.
+#'
+#' @param con A DBI connection or pool object.
+#' @param user_id The user's ID.
+#' @param group_key The group's `group_key`.
+#' @return `TRUE`/`FALSE`.
+#' @export
+user_is_in_group <- function(con, user_id, group_key) {
+  DBI::dbGetQuery(con, "
+    SELECT COUNT(*) AS n FROM group_user gu
+    JOIN groups g ON g.group_id = gu.group_id
+    WHERE gu.user_id = ? AND g.group_key = ?
+  ", params = list(user_id, group_key))$n > 0
+}

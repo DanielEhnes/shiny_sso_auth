@@ -68,7 +68,9 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
 #'   `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
 #'   `name`, or `NULL` if the user has no organizational unit -- see
 #'   [get_user_org_unit()]), `has_permission(app_key, permission_name)`,
-#'   and `logout()`. The same list is also stashed in
+#'   `is_in_group(group_key)` (cached the same way as `has_permission()`
+#'   -- see [user_is_in_group()]), and `logout()`. The same list is also
+#'   stashed in
 #'   `session$userData$authClient`, so any module nested anywhere under
 #'   the app's top-level server can reach it (e.g.
 #'   `session$userData$authClient$user_id()`) without having `auth`
@@ -178,6 +180,22 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
           return(cached$value)
         }
         result <- user_has_permission(con, state$user_id, app_key, permission_name)
+        permission_cache[[cache_key]] <- list(value = result, at = Sys.time())
+        result
+      },
+      # Generic group-membership check (see user_is_in_group()) -- e.g. a
+      # plain "team_leads" group, checked as auth$is_in_group("team_leads"),
+      # needs no schema or admin-UI work of its own since ordinary group
+      # management already covers creating it and adding/removing members.
+      # Cached the same way and for the same reason as has_permission().
+      is_in_group = function(group_key) {
+        if (is.null(state$user_id)) return(FALSE)
+        cache_key <- paste(state$user_id, "group", group_key, sep = "::")
+        cached <- permission_cache[[cache_key]]
+        if (!is.null(cached) && as.numeric(difftime(Sys.time(), cached$at, units = "secs")) < permission_cache_ttl_secs) {
+          return(cached$value)
+        }
+        result <- user_is_in_group(con, state$user_id, group_key)
         permission_cache[[cache_key]] <- list(value = result, at = Sys.time())
         result
       },

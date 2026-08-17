@@ -1073,6 +1073,9 @@ build_console_server <- function() {
     # ====================================================================
 
     activity_panel_ui <- function() {
+      all_users <- get_all_users()
+      org_units <- get_org_units()
+
       tagList(
         div(class = "activity-metric-toggle",
           radioButtons("activity_metric", NULL,
@@ -1087,10 +1090,39 @@ build_console_server <- function() {
           h4("Per app"),
           tableOutput("activity_app_table")
         ),
-        wellPanel(
-          h4("Recent activity"),
-          DT::DTOutput("activity_recent_table")
-        )
+        # Genuinely absent from the page when off, not just hidden --
+        # this whole block is simply left out of the tagList().
+        if (isTRUE(.pkgenv$show_activity_detail)) {
+          tagList(
+            wellPanel(
+              h4("Activity detail"),
+              selectInput("activity_detail_scope", "Scope",
+                choices = c("Everyone" = "all", "Specific user" = "user", "Specific org unit" = "org_unit")),
+              conditionalPanel(
+                condition = "input.activity_detail_scope == 'user'",
+                selectInput("activity_detail_user", "User", choices = setNames(all_users$user_id, all_users$email))
+              ),
+              if (nrow(org_units) > 0) {
+                conditionalPanel(
+                  condition = "input.activity_detail_scope == 'org_unit'",
+                  selectInput("activity_detail_org_unit", "Org unit", choices = setNames(org_units$group_id, org_units$name))
+                )
+              } else {
+                conditionalPanel(
+                  condition = "input.activity_detail_scope == 'org_unit'",
+                  helpText("No organizational units exist yet.")
+                )
+              },
+              uiOutput("activity_detail_summary")
+            ),
+            wellPanel(
+              h4("Recent activity"),
+              DT::DTOutput("activity_recent_table")
+            )
+          )
+        } else {
+          NULL
+        }
       )
     }
 
@@ -1120,9 +1152,42 @@ build_console_server <- function() {
       )
     })
 
+    output$activity_detail_summary <- renderUI({
+      req(is_activity_context())
+      scope <- input$activity_detail_scope
+      if (identical(scope, "user")) {
+        req(input$activity_detail_user)
+        summary <- get_activity_summary_for_user(as.character(input$activity_detail_user))
+        tagList(
+          p(paste("Last seen:", if (is.na(summary$last_seen)) "never" else summary$last_seen)),
+          p(paste("Connections last 7 days:", summary$connections_7d)),
+          p(paste("Connections last 30 days:", summary$connections_30d))
+        )
+      } else if (identical(scope, "org_unit")) {
+        req(input$activity_detail_org_unit)
+        summary <- get_activity_summary_for_org_unit(as.character(input$activity_detail_org_unit))
+        tagList(
+          p(paste("Last seen:", if (is.na(summary$last_seen)) "never" else summary$last_seen)),
+          p(paste("Unique users last 7 days:", summary$unique_users_7d)),
+          p(paste("Unique users last 30 days:", summary$unique_users_30d)),
+          p(paste("Connections last 7 days:", summary$connections_7d)),
+          p(paste("Connections last 30 days:", summary$connections_30d))
+        )
+      } else {
+        NULL
+      }
+    })
+
     output$activity_recent_table <- DT::renderDT({
       req(is_activity_context())
-      recent <- get_recent_audit_events(200)
+      scope <- if (isTRUE(.pkgenv$show_activity_detail)) input$activity_detail_scope else "all"
+      recent <- if (identical(scope, "user") && !is.null(input$activity_detail_user)) {
+        get_recent_audit_events(200, user_id = as.character(input$activity_detail_user))
+      } else if (identical(scope, "org_unit") && !is.null(input$activity_detail_org_unit)) {
+        get_recent_audit_events(200, org_unit_group_id = as.character(input$activity_detail_org_unit))
+      } else {
+        get_recent_audit_events(200)
+      }
       names(recent) <- c("User", "App", "Event", "When")
       recent
     }, options = list(pageLength = 15), rownames = FALSE)

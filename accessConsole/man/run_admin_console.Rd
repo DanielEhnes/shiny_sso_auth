@@ -11,7 +11,8 @@ run_admin_console(
   host = "127.0.0.1",
   port = NULL,
   session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
-  audit_log_enabled = FALSE
+  audit_log_enabled = FALSE,
+  show_activity_detail = FALSE
 )
 }
 \arguments{
@@ -33,6 +34,15 @@ environment variable.}
 \item{audit_log_enabled}{Whether presence audit logging should start
 out enabled. Only takes effect the first time this is run against a
 given database -- see [run_initial_setup()].}
+
+\item{show_activity_detail}{Whether the Activity tab's detail views
+(filtering the recent-activity feed by a specific user or
+organizational unit, plus a small summary for the selection) are
+shown. Defaults to `FALSE` -- those sections are then genuinely
+absent from the rendered page, not just hidden. The aggregate
+Overall/Per-app panels are unaffected either way. Launch-time only
+-- changing it means restarting with a different value, same as any
+other argument here.}
 }
 \value{
 A `shiny::shinyApp()` object.

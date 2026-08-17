@@ -22,15 +22,24 @@
 #' @param audit_log_enabled Whether presence audit logging should start
 #'   out enabled. Only takes effect the first time this is run against a
 #'   given database -- see [run_initial_setup()].
+#' @param show_activity_detail Whether the Activity tab's detail views
+#'   (filtering the recent-activity feed by a specific user or
+#'   organizational unit, plus a small summary for the selection) are
+#'   shown. Defaults to `FALSE` -- those sections are then genuinely
+#'   absent from the rendered page, not just hidden. The aggregate
+#'   Overall/Per-app panels are unaffected either way. Launch-time only
+#'   -- changing it means restarting with a different value, same as any
+#'   other argument here.
 #' @return A `shiny::shinyApp()` object.
 #' @export
 run_admin_console <- function(db_path, admin_username, admin_email, host = "127.0.0.1", port = NULL,
                                session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
-                               audit_log_enabled = FALSE) {
+                               audit_log_enabled = FALSE, show_activity_detail = FALSE) {
   .pkgenv$con <- pool::dbPool(RSQLite::SQLite(), dbname = db_path, onCreate = function(conn) {
     DBI::dbExecute(conn, "PRAGMA foreign_keys = ON;")
     DBI::dbExecute(conn, "PRAGMA journal_mode = WAL;")
   })
+  .pkgenv$show_activity_detail <- show_activity_detail
   ensure_core_schema(.pkgenv$con)
   authClient::ensure_sessions_schema(.pkgenv$con)
   authClient::ensure_auth_settings_schema(.pkgenv$con)
