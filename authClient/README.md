@@ -12,7 +12,7 @@ Not on CRAN — install from source:
 install.packages("authClient", repos = NULL, type = "source")
 ```
 
-Dependencies: `shiny`, `DBI`, `digest`, `openssl`, `sodium`, `uuid`.
+Dependencies: `shiny`, `DBI`, `digest`, `openssl`, `sodium`, `uuid`, `aws.s3`, `jsonlite`.
 
 ## Expected database
 
@@ -74,7 +74,7 @@ shinyApp(ui, server)
 
 **Login module**
 - `authLoginUI(id, cookie_name = "app_sso")`
-- `authLoginServer(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"), cookie_name = "app_sso", cookie_domain = NULL, require_app_key = NULL, permission_cache_ttl_secs = 8*3600)` → list with:
+- `authLoginServer(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"), cookie_name = "app_sso", cookie_domain = NULL, require_app_key = NULL, permission_cache_ttl_secs = 8*3600, session_backend = c("sql", "s3"))` → list with:
   - `logged_in()`, `checked()`, `user_id()`, `username()`, `org_unit()` — reactives. `org_unit()` is `NULL`, or a list with `group_key`/`name`, if the user belongs to an organizational-unit-typed group (see `get_user_org_unit()`).
   - `has_permission(app_key, permission_name)` — cached per session (TTL-bounded, see below), unions direct `user_roles` and group-granted `group_roles`
   - `is_in_group(group_key)` — cached the same way as `has_permission()`. Generic membership check for *any* group, not tied to a specific concept the way `org_unit()` is -- e.g. a plain "team_leads" group needs no schema or admin-UI work beyond creating the group and adding members via the console's existing Groups Management panel. See `user_is_in_group()`.
@@ -86,7 +86,7 @@ shinyApp(ui, server)
 
 **Change password module**
 - `changePasswordUI(id)`
-- `changePasswordServer(id, con, user_id)` — `user_id` is a reactive (e.g. `auth$user_id`). Revokes all of that user's other sessions on a successful change.
+- `changePasswordServer(id, con, user_id, session_backend = c("sql", "s3"))` — `user_id` is a reactive (e.g. `auth$user_id`). Revokes all of that user's other sessions on a successful change. Must be passed the same `session_backend` as the `authLoginServer()` call it's paired with, so it revokes sessions in the store they're actually stored in.
 
 **Identity**
 - `authenticate_user(con, username, password)` → `list(ok, user_id, username, reason)`
@@ -101,6 +101,22 @@ shinyApp(ui, server)
 
 **Sessions**
 - `ensure_sessions_schema(con)`, `create_session(con, user_id, ...)`, `validate_session(con, cookie_value, ...)`, `revoke_session(con, cookie_value)`, `revoke_all_sessions_for_user(con, user_id)`
+- S3-backed equivalents, selected via `session_backend = "s3"` (see below): `create_session_s3(user_id, ...)`, `validate_session_s3(con, cookie_value, ...)`, `revoke_session_s3(cookie_value)`, `revoke_all_sessions_for_user_s3(user_id)`. Same signatures/return shapes as their SQL counterparts (minus the leading `con` where it isn't needed) — `mod-login.R`/`mod-change-password.R` just dispatch between the two, nothing else in the login flow changes.
+
+## Session storage backends
+
+By default (`session_backend = "sql"`, or just omitting the argument) sessions live in the `sessions` SQLite table like everything else. If session read/write volume on that table becomes a bottleneck (e.g. many apps sharing one SQLite file, each touching `last_seen_at` on every page load), pass `session_backend = "s3"` to move *only* the session store to a local S3-compatible object store (MinIO or similar — anything `aws.s3` can point at via a custom endpoint, not necessarily real AWS). Users/apps/roles/permissions/groups/audit log all stay in SQLite regardless of this setting; `validate_session_s3()` still takes `con` to do one fresh, cheap `users` lookup (username/status) per validation rather than trusting a possibly-stale denormalized copy.
+
+Configure via environment variables, following this package's existing `AUTH_SESSION_SECRET` convention — no separate config-passing mechanism:
+- `AUTH_S3_BUCKET` — bucket to store session objects in
+- `AWS_S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — standard `aws.s3` env vars; point `AWS_S3_ENDPOINT` at your local S3-compatible service
+- `AUTH_S3_PREFIX` (optional) — a key prefix inserted before every object this package writes (e.g. `sessions/...` becomes `<prefix>/sessions/...`), so multiple deployments/environments can share one bucket without their session objects colliding. Unset means no prefix, same as before this option existed.
+
+**Every app sharing this SSO deployment must be configured with the same `session_backend`, bucket/endpoint, and `AUTH_S3_PREFIX`** — exactly the same requirement that already applies to `AUTH_SESSION_SECRET` today. Mixing any of these across apps in one SSO deployment means they'd be validating sessions against two different stores and SSO would silently stop working between them.
+
+**Concurrent rotation across apps**: two apps sharing one SSO session can both notice, at nearly the same moment, that the session has been idle long enough to rotate its secret. Only one write can win the conditional (`If-Match`) update; the other app's write is rejected. That's expected and handled — the losing request still treats its own validation as successful (it already checked the secret against the record it read, before either side tried to rotate), it just skips issuing its own new cookie. The browser picks up the winning rotation's cookie on its next reload, since the SSO cookie is shared domain-wide rather than per-app.
+
+The session-lifecycle logic (rotation, the rotation race above, revocation, the user→sessions index) has been tested against a fake in-R stand-in for the S3 store, not against a real `aws.s3` endpoint — if you enable `"s3"`, smoke-test it against your actual local endpoint first.
 
 **Audit (presence-only, off by default)**
 - `ensure_auth_settings_schema(con)`
