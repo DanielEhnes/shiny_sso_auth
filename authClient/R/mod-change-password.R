@@ -35,9 +35,13 @@ changePasswordUI <- function(id) {
 #' @param con A DBI connection or pool object.
 #' @param user_id A reactive returning the logged-in user's ID (e.g.
 #'   `auth$user_id` from [authLoginServer()]).
+#' @param session_backend `"sql"` (default) or `"s3"` -- must match
+#'   whatever was passed to [authLoginServer()] for this same deployment,
+#'   since it determines where the sessions being revoked actually live.
 #' @return `NULL`, invisibly (side-effecting module server).
 #' @export
-changePasswordServer <- function(id, con, user_id) {
+changePasswordServer <- function(id, con, user_id, session_backend = c("sql", "s3")) {
+  session_backend <- match.arg(session_backend)
   shiny::moduleServer(id, function(input, output, session) {
     output$change_password_message <- shiny::renderUI(NULL)
     shiny::observeEvent(input$change_password_btn, {
@@ -61,7 +65,7 @@ changePasswordServer <- function(id, con, user_id) {
         return()
       }
       set_user_password(con, uid, new_pw)
-      revoke_all_sessions_for_user(con, uid)
+      if (session_backend == "s3") revoke_all_sessions_for_user_s3(uid) else revoke_all_sessions_for_user(con, uid)
       output$change_password_message <- shiny::renderUI(shiny::div(class = "login-success", "Password changed."))
       shiny::updateTextInput(session, "current_password", value = "")
       shiny::updateTextInput(session, "new_password", value = "")

@@ -16,7 +16,9 @@ Imports:
     digest,
     openssl,
     sodium,
-    uuid
+    uuid,
+    aws.s3,
+    jsonlite
 Suggests:
     knitr,
     rmarkdown

@@ -64,6 +64,14 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
 #' @param permission_cache_ttl_secs How long, in seconds, a
 #'   `has_permission()` result is cached per session before rechecking the
 #'   database.
+#' @param session_backend `"sql"` (default) or `"s3"`. `"s3"` stores the
+#'   session record itself (not users/apps/roles/etc., which always stay
+#'   in SQL regardless) in an S3-compatible bucket instead of the `sessions`
+#'   table -- see [create_session_s3()]. Configured via the `AUTH_S3_BUCKET`
+#'   env var plus `aws.s3`'s own `AWS_S3_ENDPOINT`/`AWS_ACCESS_KEY_ID`/
+#'   `AWS_SECRET_ACCESS_KEY`. Every app sharing this SSO deployment must be
+#'   configured with the same backend (and bucket/endpoint, if `"s3"`) --
+#'   same requirement as already applies to `session_secret` today.
 #' @return A list of reactives/functions: `logged_in()`, `checked()`,
 #'   `user_id()`, `username()`, `org_unit()` (a list with `group_key`/
 #'   `name`, or `NULL` if the user has no organizational unit -- see
@@ -78,7 +86,9 @@ authLoginUI <- function(id, cookie_name = "app_sso") {
 #' @export
 authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_SECRET"),
                              cookie_name = "app_sso", cookie_domain = NULL,
-                             require_app_key = NULL, permission_cache_ttl_secs = 8 * 3600) {
+                             require_app_key = NULL, permission_cache_ttl_secs = 8 * 3600,
+                             session_backend = c("sql", "s3")) {
+  session_backend <- match.arg(session_backend)
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     state <- shiny::reactiveValues(logged_in = FALSE, user_id = NULL, username = NULL, org_unit = NULL, checked = FALSE)
@@ -120,7 +130,7 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
       state$checked <- TRUE
       raw <- input$auth_cookie_in
       if (is.null(raw) || raw == "") return()
-      res <- validate_session(con, raw, session_secret)
+      res <- if (session_backend == "s3") validate_session_s3(con, raw, session_secret) else validate_session(con, raw, session_secret)
       if (res$ok) {
         state$logged_in <- TRUE
         state$user_id <- res$user_id
@@ -156,8 +166,12 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         output$login_message <- shiny::renderUI(shiny::div(class = "login-error", "You don't have access to this application."))
         return()
       }
-      sess <- create_session(con, res$user_id, session_secret,
-                              created_by_app = if (is.null(require_app_key)) NA_character_ else require_app_key)
+      created_by_app <- if (is.null(require_app_key)) NA_character_ else require_app_key
+      sess <- if (session_backend == "s3") {
+        create_session_s3(res$user_id, session_secret, created_by_app = created_by_app)
+      } else {
+        create_session(con, res$user_id, session_secret, created_by_app = created_by_app)
+      }
       push_cookie(sess$cookie_value, sess$max_age_secs)
       state$logged_in <- TRUE
       state$user_id <- res$user_id
@@ -200,7 +214,9 @@ authLoginServer <- function(id, con, session_secret = Sys.getenv("AUTH_SESSION_S
         result
       },
       logout = function() {
-        if (!is.null(input$auth_cookie_in) && nzchar(input$auth_cookie_in)) revoke_session(con, input$auth_cookie_in)
+        if (!is.null(input$auth_cookie_in) && nzchar(input$auth_cookie_in)) {
+          if (session_backend == "s3") revoke_session_s3(input$auth_cookie_in) else revoke_session(con, input$auth_cookie_in)
+        }
         clear_cookie()
         state$logged_in <- FALSE
         state$user_id <- NULL

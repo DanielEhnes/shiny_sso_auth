@@ -4,7 +4,7 @@
 \alias{changePasswordServer}
 \title{Change-password server logic}
 \usage{
-changePasswordServer(id, con, user_id)
+changePasswordServer(id, con, user_id, session_backend = c("sql", "s3"))
 }
 \arguments{
 \item{id}{The Shiny module ID, must match the corresponding
@@ -14,6 +14,10 @@ changePasswordServer(id, con, user_id)
 
 \item{user_id}{A reactive returning the logged-in user's ID (e.g.
 `auth$user_id` from [authLoginServer()]).}
+
+\item{session_backend}{`"sql"` (default) or `"s3"` -- must match
+whatever was passed to [authLoginServer()] for this same deployment,
+since it determines where the sessions being revoked actually live.}
 }
 \value{
 `NULL`, invisibly (side-effecting module server).
